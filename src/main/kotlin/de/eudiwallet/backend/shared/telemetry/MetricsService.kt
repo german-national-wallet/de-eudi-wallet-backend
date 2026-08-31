@@ -9,6 +9,8 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 
+private const val METRICS_PREFIX = "wallet_backend_"
+
 enum class PushMetricOutcome {
     DELIVERED,
     TERMINAL,
@@ -25,19 +27,19 @@ class MetricsService(
     private val primaryKeyTimeToExpiryByLineage = ConcurrentHashMap<String, LocalDate>()
 
     private val pushNotificationCounter by lazy {
-        meter.counterBuilder("push_notification_delivery")
+        meter.counterBuilder("${METRICS_PREFIX}push_notification_delivery")
             .setDescription("Push notifications handled by PNS, by delivery outcome")
             .build()
     }
 
     private val pushPublishFailureCounter by lazy {
-        meter.counterBuilder("push_notification_publish_failure")
+        meter.counterBuilder("${METRICS_PREFIX}push_notification_publish_failure")
             .setDescription("Push notifications dropped because the publish to the topic failed")
             .build()
     }
 
     init {
-        meter.gaugeBuilder("primary_key_time_to_expiry")
+        meter.gaugeBuilder("${METRICS_PREFIX}primary_key_time_to_expiry")
             .ofLongs()
             .setUnit("d")
             .setDescription("Days until the primary key of a lineage expires")
