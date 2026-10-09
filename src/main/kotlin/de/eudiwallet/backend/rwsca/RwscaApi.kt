@@ -115,7 +115,9 @@ const val RWSCA_ACCOUNT_ID_HEADER = "Rwsca-Account-Id"
 const val WI_RWSCA_PIN_PUBK_FIELD = "wi_rwsca_pin_pubk"
 const val RWSCA_PIN_SESSION_TOKEN_FIELD = "rwsca_pin_session_token"
 const val RWSCA_PIN_SESSION_EXPIRATION_TIME_FIELD = "rwsca_pin_session_expiration_time"
+
 const val RWSCA_WI_WRAPPED_PRVK_FIELD = "rwsca_wi_wrapped_prvk"
+
 const val RWSCD_WI_PUBK_FIELD = "rwscd_wi_pubk"
 const val RWSCA_WI_KEYS_FIELD = "rwsca_wi_keys"
 const val RWSCA_WTE_FIELD = "rwsca_wte"
@@ -213,8 +215,8 @@ data class SignDataResponse(
 class RwscaApi(
     private val rwscaAccountService: RwscaAccountService,
     private val config: RwscaConfiguration,
-    @Qualifier("rwscaMasterLineage")
-    private val rwscaMasterLineage: KeySource<SymmetricKeySet>,
+    @Qualifier("rwscdMasterLineage")
+    private val rwscdMasterLineage: KeySource<SymmetricKeySet>,
     private val mdvmTokenParser: MdvmTokenParser,
     private val pinSessionTokenBuilder: PinSessionTokenBuilder,
     @Qualifier(RWSCA_WI_HSM_PROVIDER)
@@ -377,7 +379,7 @@ class RwscaApi(
             val account =
                 rwscaAccountService.findActiveAccount(rwscaAccountId, wiMdvmAuthPubk)
 
-            val masterKeyId = rwscaMasterLineage.current().primaryId
+            val masterKeyId = rwscdMasterLineage.current().primaryId
 
             val keys =
                 coroutineScope {

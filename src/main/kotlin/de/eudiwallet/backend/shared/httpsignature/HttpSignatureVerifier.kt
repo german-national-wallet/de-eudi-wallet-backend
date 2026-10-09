@@ -1,5 +1,6 @@
 package de.eudiwallet.backend.shared.httpsignature
 
+import com.authlete.hms.ComponentIdentifier
 import com.authlete.hms.ComponentValueProvider
 import com.authlete.hms.SignatureBase
 import com.authlete.hms.SignatureBaseBuilder
@@ -12,6 +13,7 @@ import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import org.springframework.http.HttpHeaders
 import org.springframework.http.server.reactive.ServerHttpRequest
 import org.springframework.stereotype.Component
+import java.security.InvalidKeyException
 import java.security.Signature
 import java.security.SignatureException
 import java.security.interfaces.ECPublicKey
@@ -83,7 +85,13 @@ class HttpSignatureVerifier(
                 ?: throw SignatureVerificationException.WrongAlgorithm()
         val base = computeSignatureBase(request, entry.metadata)
         val signatureVerifier = signatureVerifier(algorithm, ecPublicKey, base)
-        if (!signatureVerifier.verify(entry.signature)) {
+        val verificationResult =
+            try {
+                signatureVerifier.verify(entry.signature)
+            } catch (_: SignatureException) {
+                false
+            }
+        if (!verificationResult) {
             throw SignatureVerificationException.WrongSignature(signatureLabel)
         }
     }
@@ -114,11 +122,10 @@ class HttpSignatureVerifier(
         signatureLabel: String,
     ) {
         val requiredComponentsCanonical = requiredSignatureComponents.map { it.lowercase().trim() }
-        val receivedComponents = metadata.map { it.componentName }
-        if (!receivedComponents.containsAll(requiredComponentsCanonical)) {
+        if (!metadata.containsAll(requiredComponentsCanonical.map(::ComponentIdentifier))) {
             throw SignatureVerificationException.WrongSignedComponents(
                 signatureLabel,
-                received = receivedComponents,
+                received = metadata.map { it.serialize() },
                 required = requiredComponentsCanonical,
             )
         }
@@ -152,6 +159,8 @@ class HttpSignatureVerifier(
         signatureVerifier.initVerify(ecPublicKey)
         signatureVerifier.update(base.serialize().encodeToByteArray())
         signatureVerifier
+    } catch (ex: InvalidKeyException) {
+        throw SignatureVerificationException.VerifierFailure(ex)
     } catch (ex: SignatureException) {
         throw SignatureVerificationException.VerifierFailure(ex)
     }

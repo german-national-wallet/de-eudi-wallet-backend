@@ -1,6 +1,5 @@
 package de.eudiwallet.backend.shared.messaging
 
-import de.eudiwallet.backend.shared.telemetry.MetricsService
 import io.github.oshai.kotlinlogging.KLogger
 
 enum class WalletInstanceRevocationOutcome {
@@ -14,10 +13,10 @@ enum class WalletInstanceRevocationOutcome {
 internal fun WalletInstanceRevocationOutcome.report(
     module: Module,
     event: WalletInstanceRevocationEvent,
-    metricsService: MetricsService,
+    messagingMetrics: MessagingMetrics,
     log: KLogger,
 ) {
-    metricsService.countWalletRevocationConsumed(module.name.lowercase(), name.lowercase())
+    messagingMetrics.countWalletRevocationConsumed(module, this)
     when (this) {
         WalletInstanceRevocationOutcome.UNKNOWN_HANDLE -> {
             log.warn { "Revocation ${event.eventId}: $this for WI handle ${event.wiHandle}" }

@@ -7,6 +7,6 @@ import org.springframework.context.annotation.Configuration
 
 @Configuration
 class CoroutineConfig {
-    @Bean
+    @Bean(destroyMethod = "")
     fun ioDispatcher(): CoroutineDispatcher = Dispatchers.IO
 }

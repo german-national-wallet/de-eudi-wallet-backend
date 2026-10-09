@@ -1,6 +1,7 @@
 package de.eudiwallet.backend.mdvm
 
 import io.r2dbc.postgresql.codec.Json
+import kotlinx.coroutines.flow.Flow
 import org.springframework.data.annotation.Id
 import org.springframework.data.annotation.Version
 import org.springframework.data.r2dbc.repository.Modifying
@@ -95,6 +96,8 @@ interface MdvmAccountRepository : CoroutineCrudRepository<MdvmAccountEntity, UUI
     suspend fun deleteByMdvmWiId(
         @Param(MDVM_ACCOUNT_ID_PARAM) mdvmWiId: UUID,
     )
+
+    fun findAllByRevokedAtIsNull(): Flow<MdvmAccountEntity>
 
     @Query(
         """

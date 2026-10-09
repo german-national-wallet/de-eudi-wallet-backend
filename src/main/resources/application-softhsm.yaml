@@ -2,6 +2,7 @@ hsm:
   module-library: /usr/local/lib/softhsm/libsofthsm2.so
   slot-label: TEST_SLOT
   slot-pin: 1234
+  wrapping-mechanism: CKM_AES_KEY_WRAP_PAD
   key-prefix: softhsm
   pool-size: 1
 

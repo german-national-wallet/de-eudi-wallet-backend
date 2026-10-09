@@ -21,6 +21,7 @@ class AndroidIntegrityConfig(
     val minimalAppVersion: Long,
     val revocationListResource: Resource? = ClassPathResource("android/certificate-revocations.json"),
     val vulnerableClassesResource: Resource? = ClassPathResource("android/vulnerable_device_classes.json"),
+    val additionalTrustedRoot: Resource? = null,
 ) {
     private val log = KotlinLogging.logger {}
 
@@ -40,7 +41,7 @@ class AndroidIntegrityConfig(
                 "from ${resource.description}"
         }
 
-        return vulnerableClasses.entries.also { it.forEach { entry -> entry.verify() } }
+        return vulnerableClasses.entries.onEach { entry -> entry.verify() }
     }
 }
 

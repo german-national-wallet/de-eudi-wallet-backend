@@ -2,12 +2,14 @@ package de.eudiwallet.backend.mdvm
 
 import de.eudiwallet.backend.mdvm.MdvmAccount.Companion.toStorage
 import de.eudiwallet.backend.shared.mdvmtoken.MdvmAccountId
+import de.eudiwallet.backend.shared.messaging.MessagingMetrics
 import de.eudiwallet.backend.shared.messaging.MessagingUnavailableException
 import de.eudiwallet.backend.shared.messaging.PushNotificationPublisher
 import de.eudiwallet.backend.shared.messaging.WalletInstanceRevocationOutcome
-import de.eudiwallet.backend.shared.telemetry.MetricsService
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
@@ -19,7 +21,8 @@ import java.util.UUID
 class MdvmAccountService(
     private val mdvmAccountRepository: MdvmAccountRepository,
     private val telemetryService: TelemetryService,
-    private val metricsService: MetricsService,
+    private val mdvmMetrics: MdvmMetrics,
+    private val messagingMetrics: MessagingMetrics,
     private val pushNotificationPublisherProvider: ObjectProvider<PushNotificationPublisher>,
 ) {
     private val log = KotlinLogging.logger {}
@@ -40,7 +43,10 @@ class MdvmAccountService(
                     iosDeviceAttestation = deviceAttestation?.canonicalAttestation,
                     iosDeviceAssertion = deviceAssertion,
                 )
-            saveNewAccount(account)
+            saveNewAccount(account).also {
+                telemetryService.traceAttributes(deviceClass.loggingInfo())
+                mdvmMetrics.countDeviceRegistered(deviceClass.metricDimensions())
+            }
         }
 
     suspend fun createAndroidAccount(
@@ -57,7 +63,10 @@ class MdvmAccountService(
                     deviceClass = deviceClass,
                     androidDeviceAttestation = attestationData?.attestationDetails,
                 )
-            saveNewAccount(account)
+            saveNewAccount(account).also {
+                telemetryService.traceAttributes(attestationData?.attestationDetails?.loggingInfo() ?: emptyMap())
+                mdvmMetrics.countDeviceRegistered(attestationData?.attestationDetails.metricDimensions())
+            }
         }
 
     private suspend fun saveNewAccount(account: MdvmAccount): MdvmAccount =
@@ -71,6 +80,9 @@ class MdvmAccountService(
         telemetryService.withSpan("MdvmAccountService.findMdvmAccount") {
             mdvmAccountRepository.findByMdvmWiId(accountId.id)?.toDomain() ?: throw AccountNotFound(accountId)
         }
+
+    fun findNonRevokedAccounts(): Flow<MdvmAccount> =
+        mdvmAccountRepository.findAllByRevokedAtIsNull().map { it.toDomain() }
 
     suspend fun revokeByWiHandle(wiHandle: String): WalletInstanceRevocationOutcome =
         telemetryService.withSpan("MdvmAccountService.revokeByWiHandle") {
@@ -99,7 +111,7 @@ class MdvmAccountService(
         try {
             publisher.publish(revocationPushNotification(accountId))
         } catch (ex: MessagingUnavailableException) {
-            metricsService.countPushPublishFailure()
+            messagingMetrics.countPushPublishFailure()
             log.error(ex) { "Dropping revocation push for $accountId, the revocation itself stands" }
         }
     }
@@ -116,13 +128,22 @@ class MdvmAccountService(
                 mdvmAccountRepository.findByMdvmWiIdWithLockNoWait(mdvmAccountId.id)
                     ?.toDomain() ?: throw AccountNotFound(mdvmAccountId)
             account.requireNotRevoked()
-
             mdvmAccountRepository.updateAccount(
                 mdvmWiId = mdvmAccountId.id,
                 deviceClass = deviceClass.toStorage(),
                 iosDeviceAssertion = iosDeviceAssertion.toStorage(),
                 androidAttestationDetails = androidAttestationDetails.toStorage(),
-            )
+            ).also {
+                telemetryService.traceAttributes(
+                    deviceClass.loggingInfo() + (androidAttestationDetails?.loggingInfo() ?: emptyMap()),
+                )
+                mdvmMetrics.countDeviceRenewed(
+                    when (deviceClass) {
+                        is IosDeviceInfo -> deviceClass.metricDimensions()
+                        is AndroidDeviceInfo -> androidAttestationDetails.metricDimensions()
+                    },
+                )
+            }
         }
 
     @Transactional

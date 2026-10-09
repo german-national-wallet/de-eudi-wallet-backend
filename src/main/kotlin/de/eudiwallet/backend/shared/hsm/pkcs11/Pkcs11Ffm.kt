@@ -73,6 +73,7 @@ internal class Pkcs11Ffm private constructor(
     private val cGenerateKeyPair = function(59, ULONG, PTR, PTR, ULONG, PTR, ULONG, PTR, PTR)
     private val cWrapKey = function(60, ULONG, PTR, ULONG, ULONG, PTR, PTR)
     private val cUnwrapKey = function(61, ULONG, PTR, ULONG, PTR, ULONG, PTR, ULONG, PTR)
+    private val cGenerateRandom = function(64, ULONG, PTR, ULONG)
 
     init {
         initialize()
@@ -149,7 +150,7 @@ internal class Pkcs11Ffm private constructor(
                 "C_GenerateKeyPair",
                 cGenerateKeyPair.invoke(
                     session,
-                    arena.mechanism(mechanism).segment,
+                    arena.mechanism(mechanism),
                     arena.template(publicKeyTemplate),
                     publicKeyTemplate.size.toLong(),
                     arena.template(privateKeyTemplate),
@@ -264,7 +265,7 @@ internal class Pkcs11Ffm private constructor(
         key: Long,
     ): ByteArray =
         Arena.ofConfined().use { arena ->
-            val mech = arena.mechanism(mechanism).segment
+            val mech = arena.mechanism(mechanism)
             arena.output("C_WrapKey", OUTPUT_CAPACITY) { out, outLen ->
                 cWrapKey.invoke(session, mech, wrappingKey, key, out, outLen) as Long
             }
@@ -283,7 +284,7 @@ internal class Pkcs11Ffm private constructor(
                 "C_UnwrapKey",
                 cUnwrapKey.invoke(
                     session,
-                    arena.mechanism(mechanism).segment,
+                    arena.mechanism(mechanism),
                     unwrappingKey,
                     arena.allocateFrom(BYTE, *wrappedKey),
                     wrappedKey.size.toLong(),
@@ -302,7 +303,7 @@ internal class Pkcs11Ffm private constructor(
         data: ByteArray,
     ): ByteArray =
         Arena.ofConfined().use { arena ->
-            check("C_SignInit", cSignInit.invoke(session, arena.mechanism(mechanism).segment, key) as Long)
+            check("C_SignInit", cSignInit.invoke(session, arena.mechanism(mechanism), key) as Long)
             val input = arena.allocateFrom(BYTE, *data)
             arena.output("C_Sign", outputCapacity(data)) { out, outLen ->
                 cSign.invoke(session, input, data.size.toLong(), out, outLen) as Long
@@ -316,7 +317,7 @@ internal class Pkcs11Ffm private constructor(
         data: ByteArray,
         signature: ByteArray,
     ) = Arena.ofConfined().use { arena ->
-        check("C_VerifyInit", cVerifyInit.invoke(session, arena.mechanism(mechanism).segment, key) as Long)
+        check("C_VerifyInit", cVerifyInit.invoke(session, arena.mechanism(mechanism), key) as Long)
         check(
             "C_Verify",
             cVerify.invoke(
@@ -336,16 +337,12 @@ internal class Pkcs11Ffm private constructor(
         data: ByteArray,
     ): ByteArray =
         Arena.ofConfined().use { arena ->
-            val mech = arena.mechanism(mechanism)
-            check("C_EncryptInit", cEncryptInit.invoke(session, mech.segment, key) as Long)
+            check("C_EncryptInit", cEncryptInit.invoke(session, arena.mechanism(mechanism), key) as Long)
             val input = arena.allocateFrom(BYTE, *data)
             try {
-                val output =
-                    arena.output("C_Encrypt", outputCapacity(data)) { out, outLen ->
-                        cEncrypt.invoke(session, input, data.size.toLong(), out, outLen) as Long
-                    }
-                mech.readBackIv()
-                output
+                arena.output("C_Encrypt", outputCapacity(data)) { out, outLen ->
+                    cEncrypt.invoke(session, input, data.size.toLong(), out, outLen) as Long
+                }
             } finally {
                 input.fill(0)
             }
@@ -358,7 +355,7 @@ internal class Pkcs11Ffm private constructor(
         data: ByteArray,
     ): ByteArray =
         Arena.ofConfined().use { arena ->
-            check("C_DecryptInit", cDecryptInit.invoke(session, arena.mechanism(mechanism).segment, key) as Long)
+            check("C_DecryptInit", cDecryptInit.invoke(session, arena.mechanism(mechanism), key) as Long)
             val input = arena.allocateFrom(BYTE, *data)
             arena.output("C_Decrypt", outputCapacity(data)) { out, outLen ->
                 cDecrypt.invoke(session, input, data.size.toLong(), out, outLen) as Long
@@ -407,26 +404,22 @@ internal class Pkcs11Ffm private constructor(
         return segment
     }
 
-    private class NativeMechanism(
-        val segment: MemorySegment,
-        private val iv: MemorySegment?,
-        private val mechanism: Mechanism,
-    ) {
-        fun readBackIv() {
-            if (iv != null && mechanism is Mechanism.AesGcm) {
-                MemorySegment.copy(iv, BYTE, 0, mechanism.iv, 0, mechanism.iv.size)
-            }
+    override fun generateRandom(
+        session: Long,
+        length: Int,
+    ): ByteArray =
+        Arena.ofConfined().use { arena ->
+            val out = arena.allocate(length.toLong())
+            check("C_GenerateRandom", cGenerateRandom.invoke(session, out, length.toLong()) as Long)
+            out.toArray(BYTE)
         }
-    }
 
-    private fun Arena.mechanism(mechanism: Mechanism): NativeMechanism {
+    private fun Arena.mechanism(mechanism: Mechanism): MemorySegment {
         val segment = allocate(MECHANISM)
         segment.set(ULONG, 0, mechanism.id)
-        var iv: MemorySegment? = null
         if (mechanism is Mechanism.AesGcm) {
-            iv = allocateFrom(BYTE, *mechanism.iv)
             val params = allocate(GCM_PARAMS)
-            params.set(PTR, GCM_IV_OFFSET, iv)
+            params.set(PTR, GCM_IV_OFFSET, allocateFrom(BYTE, *mechanism.iv))
             params.set(ULONG, GCM_IV_LENGTH_OFFSET, mechanism.iv.size.toLong())
             params.set(ULONG, GCM_IV_BITS_OFFSET, mechanism.iv.size * Byte.SIZE_BITS.toLong())
             val aad = mechanism.aad
@@ -439,7 +432,7 @@ internal class Pkcs11Ffm private constructor(
             segment.set(PTR, MECHANISM_PARAMETER_OFFSET, MemorySegment.NULL)
             segment.set(ULONG, MECHANISM_PARAMETER_LENGTH_OFFSET, 0)
         }
-        return NativeMechanism(segment, iv, mechanism)
+        return segment
     }
 
     private fun check(

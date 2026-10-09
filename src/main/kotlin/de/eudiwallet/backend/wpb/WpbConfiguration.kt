@@ -5,10 +5,10 @@ import de.eudiwallet.backend.shared.hsm.HsmConfiguration
 import de.eudiwallet.backend.shared.hsm.HsmProvider
 import de.eudiwallet.backend.shared.keyrollover.AsymmetricSigningLineage
 import de.eudiwallet.backend.shared.keyrollover.CertifiedKey
+import de.eudiwallet.backend.shared.keyrollover.KeyRolloverMetrics
 import de.eudiwallet.backend.shared.keyrollover.KeySource
 import de.eudiwallet.backend.shared.keyrollover.stubCertifiedKeySource
 import de.eudiwallet.backend.shared.s3.S3CertChainProvider
-import de.eudiwallet.backend.shared.telemetry.MetricsService
 import kotlinx.coroutines.CoroutineDispatcher
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.context.annotation.Bean
@@ -44,7 +44,7 @@ class WpbKeyProvider(
     private val hsmProvider: HsmProvider,
     private val s3CertChainProvider: S3CertChainProvider,
     private val ioDispatcher: CoroutineDispatcher,
-    private val metricsService: MetricsService,
+    private val keyRolloverMetrics: KeyRolloverMetrics,
 ) {
     @Bean(name = ["wpbWiaAuthLineage"])
     @Profile("!build-docs")
@@ -57,7 +57,7 @@ class WpbKeyProvider(
             hsmProvider = hsmProvider,
             s3CertChainProvider = s3CertChainProvider,
             ioDispatcher = ioDispatcher,
-            metricsService = metricsService,
+            keyRolloverMetrics = keyRolloverMetrics,
         ).also { it.initialize() }
 
     @Bean(name = ["wpbWiaAuthLineage"])

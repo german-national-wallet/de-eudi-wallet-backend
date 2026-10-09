@@ -7,8 +7,8 @@ import de.eudiwallet.backend.shared.hsm.HsmKeyId
 import de.eudiwallet.backend.shared.hsm.HsmProvider
 import de.eudiwallet.backend.shared.hsm.certObjectKey
 import de.eudiwallet.backend.shared.hsm.findActiveKeys
+import de.eudiwallet.backend.shared.hsm.findNextKey
 import de.eudiwallet.backend.shared.s3.S3CertChainProvider
-import de.eudiwallet.backend.shared.telemetry.MetricsService
 import de.eudiwallet.backend.shared.telemetry.runBlockingWithTelemetry
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineDispatcher
@@ -37,7 +37,7 @@ class AsymmetricSigningLineage(
     private val hsmProvider: HsmProvider,
     private val s3CertChainProvider: S3CertChainProvider,
     private val ioDispatcher: CoroutineDispatcher,
-    private val metricsService: MetricsService,
+    private val keyRolloverMetrics: KeyRolloverMetrics,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) : RefreshableLineage,
     KeySource<CertifiedKey> {
@@ -58,7 +58,10 @@ class AsymmetricSigningLineage(
     override fun refresh() = roll(failFast = false)
 
     private fun roll(failFast: Boolean) {
-        val candidates = scanKeys().findActiveKeys(Instant.now(clock))
+        val keys = scanKeys()
+        val now = Instant.now(clock)
+        if (keys.isNotEmpty()) keyRolloverMetrics.setNextKey(name, keys.findNextKey(now))
+        val candidates = keys.findActiveKeys(now)
         if (candidates.isEmpty()) {
             check(!failFast) { "$name has no valid key in the HSM scan for prefix '$keyPrefix'" }
             logHoldingLastGood("no valid key in HSM scan for prefix '$keyPrefix'")
@@ -90,7 +93,7 @@ class AsymmetricSigningLineage(
                     null
                 }
             if (resolved != null) {
-                commit(resolved)
+                commit(resolved, candidate)
                 return
             }
             if (candidate.keyId == heldKey?.keyId && holdUsable) break
@@ -99,11 +102,17 @@ class AsymmetricSigningLineage(
         logHoldingLastGood("no valid key resolved")
     }
 
-    private fun commit(resolved: CertifiedKey) {
+    private fun commit(
+        resolved: CertifiedKey,
+        key: HsmKey,
+    ) {
         val previous = held.getAndSet(resolved)
         if (resolved == previous) return
-        metricsService.setPrimaryKeyExpiryDate(name, resolved.expiresAt.lastUsableDay())
-        log.info { "$name: adopted ${resolved.keyId}, expires ${resolved.expiresAt}, replacing ${previous?.keyId}" }
+        keyRolloverMetrics.setPrimaryKeyExpiryDate(name, key, resolved.expiresAt.lastUsableDay())
+        log.info {
+            "$name: adopted ${key.label} (${resolved.keyId.value}), expires ${resolved.expiresAt}, " +
+                "replacing ${previous?.keyId?.value}"
+        }
     }
 
     private fun logHoldingLastGood(reason: String) {

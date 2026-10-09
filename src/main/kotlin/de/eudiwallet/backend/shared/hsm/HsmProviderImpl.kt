@@ -1,6 +1,5 @@
 package de.eudiwallet.backend.shared.hsm
 
-import de.eudiwallet.backend.shared.telemetry.MetricsService
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import io.opentelemetry.api.trace.Span
 import io.opentelemetry.api.trace.StatusCode
@@ -47,7 +46,7 @@ class HsmProviderImpl(
 class HsmModule(
     private val config: HsmConfiguration,
     private val telemetryService: TelemetryService,
-    private val metricsService: MetricsService,
+    private val hsmMetrics: HsmMetrics,
 ) {
     fun provider(slot: SlotConfig): HsmProvider =
         HsmProviderImpl(
@@ -56,10 +55,10 @@ class HsmModule(
             HsmSessionPool.getOrCreate(
                 slot,
                 config.moduleLibrary,
-                config.wrappingMechanism,
+                config.wrappingMechanism.mechanism,
                 config.poolBorrowTimeout,
                 telemetryService,
-                metricsService,
+                hsmMetrics,
             ),
         )
 }

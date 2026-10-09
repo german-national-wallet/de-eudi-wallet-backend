@@ -8,10 +8,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 KEYS_DIR="${KEYS_DIR:-$SCRIPT_DIR/generated/hsm-keys}"
 
-if [ ! -f "$KEYS_DIR/rwscd_master_key.key" ]; then
-  echo "No key material in $KEYS_DIR - run softhsm/gen-keys.sh first" >&2
-  exit 1
-fi
 echo "Token store: SOFTHSM2_CONF=${SOFTHSM2_CONF:-<unset, system default>}"
 
 if softhsm2-util --show-slots | grep -qF "$HSM_SLOT_LABEL"; then
@@ -47,6 +43,10 @@ load_key() {
   file="$3"
   shift 3
 
+  if [ ! -f "$file" ]; then
+    echo "Missing $file - run softhsm/gen-keys.sh on a fresh store, or: openssl rand -out $file 32" >&2
+    exit 1
+  fi
   if pkcs11cmd -O --type "$type" --label "$label" 2>/dev/null | grep -qF "$label"; then
     echo "Deleting existing key with label '$label'"
     pkcs11cmd --delete-object --type "$type" --label "$label"
@@ -78,6 +78,9 @@ load_keypair() {
 
 load_key "rwscd_master_key" secrkey "$KEYS_DIR/rwscd_master_key.key" --key-type AES:32 --usage-wrap
 load_key "rwscd_challenge_symk" secrkey "$KEYS_DIR/rwscd_challenge_symk.key" --key-type GENERIC:32 --usage-sign
+load_key "mdvm_challenge_symk" secrkey "$KEYS_DIR/mdvm_challenge_symk.key" --key-type GENERIC:32 --usage-sign
+load_key "wpb_challenge_symk" secrkey "$KEYS_DIR/wpb_challenge_symk.key" --key-type GENERIC:32 --usage-sign
+load_key "pns_challenge_symk" secrkey "$KEYS_DIR/pns_challenge_symk.key" --key-type GENERIC:32 --usage-sign
 load_key "rwscd_pin_symk" secrkey "$KEYS_DIR/rwscd_pin_symk.key" --key-type GENERIC:32 --usage-sign
 load_key "rwscd_aead_symk" secrkey "$KEYS_DIR/rwscd_aead_symk.key" --key-type AES:32 --usage-decrypt
 load_keypair "mdvm_attestation" "$KEYS_DIR/mdvm_attestation_prvk.der" "$KEYS_DIR/mdvm_attestation_pubk.der"

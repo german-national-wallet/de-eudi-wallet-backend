@@ -34,15 +34,15 @@ data class RwscaBoundWrappedPrvk(
 
 @Component
 class RwscaBoundWrappedPrvkBuilder(
-    @Qualifier("rwscaAeadSymLineage")
-    private val rwscaAeadSymLineage: KeySource<SymmetricKeySet>,
+    @Qualifier("rwscdAeadSymLineage")
+    private val rwscdAeadSymLineage: KeySource<SymmetricKeySet>,
     private val rwscaConfiguration: RwscaConfiguration,
     private val jweCrypter: HsmJweCrypter,
 ) {
     companion object {
         const val JWT_TYPE = "rwsca-bound-wrapped-key+jwe"
         const val RWSCA_ACCOUNT_ID_CLAIM = "rwsca_account_id"
-        const val RWSCA_MASTER_KEY_ID_CLAIM = "master_key_id"
+        const val RWSCD_MASTER_KEY_ID_CLAIM = "master_key_id"
         const val RWSCD_WRAPPED_KEY_CLAIM = "rwscd_wrapped_key"
     }
 
@@ -53,7 +53,7 @@ class RwscaBoundWrappedPrvkBuilder(
     ): RwscaBoundWrappedPrvk = RwscaBoundWrappedPrvk(rwscaAccountId, hsmWrappedPrvk, masterKeyId)
 
     suspend fun RwscaBoundWrappedPrvk.serializeToJwe(): String {
-        val aeadPrimaryId = rwscaAeadSymLineage.current().primaryId
+        val aeadPrimaryId = rwscdAeadSymLineage.current().primaryId
 
         val header =
             JWEHeader.Builder(JWEAlgorithm.DIR, EncryptionMethod.A256GCM)
@@ -65,7 +65,7 @@ class RwscaBoundWrappedPrvkBuilder(
             JWTClaimsSet.Builder()
                 .issueTime(Date.from(Instant.now()))
                 .claim(RWSCA_ACCOUNT_ID_CLAIM, rwscaAccountId.toString())
-                .claim(RWSCA_MASTER_KEY_ID_CLAIM, masterKeyId.value)
+                .claim(RWSCD_MASTER_KEY_ID_CLAIM, masterKeyId.value)
                 .claim(RWSCD_WRAPPED_KEY_CLAIM, hsmWrappedPrvk.bytes.toBase64())
 
         val jwt = EncryptedJWT(header.build(), claimsSet.build())
@@ -83,10 +83,10 @@ class RwscaBoundWrappedPrvkBuilder(
             }
         try {
             jwt.validateType(JWT_TYPE)
-            jwt.validatedKeyId(rwscaAeadSymLineage.current().validKeys.map { it.keyId.value })
+            jwt.validatedKeyId(rwscdAeadSymLineage.current().validKeys.map { it.keyId.value })
             jweCrypter.decrypt(jwt)
             jwt.validateIssuer(rwscaConfiguration.issuer)
-            val masterKeyId = jwt.getStringClaim(RWSCA_MASTER_KEY_ID_CLAIM)
+            val masterKeyId = jwt.getStringClaim(RWSCD_MASTER_KEY_ID_CLAIM)
             val rwscaAccountId = RwscaAccountId(jwt.getUUIDClaim(RWSCA_ACCOUNT_ID_CLAIM))
             val hsmWrappedPrvk = HsmWrappedPrvk(jwt.getBase64DecodedClaim(RWSCD_WRAPPED_KEY_CLAIM))
             return RwscaBoundWrappedPrvk(rwscaAccountId, hsmWrappedPrvk, HsmKeyId(masterKeyId))

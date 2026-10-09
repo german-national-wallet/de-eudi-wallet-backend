@@ -19,6 +19,7 @@ import de.eudiwallet.backend.shared.httpsignature.SignatureVerificationException
 import de.eudiwallet.backend.shared.json.toJson
 import de.eudiwallet.backend.shared.jwt.JwtException
 import de.eudiwallet.backend.shared.mdvmtoken.MdvmAccountId
+import de.eudiwallet.backend.shared.messaging.MessagingUnavailableException
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.swagger.v3.oas.annotations.media.Schema
@@ -608,6 +609,12 @@ class MdvmErrorHandler(
         return createErrorResponseEntity(MdvmErrorResponseCode.DB_UNAVAILABLE, e)
     }
 
+    @ExceptionHandler(MessagingUnavailableException::class)
+    fun handleMessagingUnavailable(e: MessagingUnavailableException): ResponseEntity<MdvmErrorResponse> {
+        log.error(e) {}
+        return createErrorResponseEntity(MdvmErrorResponseCode.MESSAGING_UNAVAILABLE, e)
+    }
+
     @ExceptionHandler(HsmException.GetSessionFailedException::class)
     fun handleHsmSessionUnavailable(e: HsmException.GetSessionFailedException): ResponseEntity<MdvmErrorResponse> {
         log.error(e) {}
@@ -752,6 +759,7 @@ enum class MdvmErrorResponseCode(
     BAD_REQUEST(HttpStatus.BAD_REQUEST, "The request is malformed"),
     DB_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "DB temporarily unavailable, please retry later"),
     HSM_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "HSM is temporarily unavailable, please retry later"),
+    MESSAGING_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Messaging temporarily unavailable, please retry later"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error"),
 }
 

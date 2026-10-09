@@ -25,6 +25,7 @@ sealed class HsmKeyRef {
 
     data class AesKeyRef(
         override val handle: Long,
+        val id: HsmKeyId,
     ) : HsmKeyRef()
 
     data class GenericSecretKeyRef(
@@ -36,18 +37,30 @@ sealed class HsmKeyClass<T : HsmKeyRef>(
     internal val objectClass: Long,
     internal val keyType: Long,
 ) {
-    internal abstract fun ref(handle: Long): T
+    internal abstract fun ref(
+        handle: Long,
+        id: HsmKeyId,
+    ): T
 
     object EcPrivate : HsmKeyClass<HsmKeyRef.EcPrivateKeyRef>(Ck.CKO_PRIVATE_KEY, Ck.CKK_EC) {
-        override fun ref(handle: Long) = HsmKeyRef.EcPrivateKeyRef(handle)
+        override fun ref(
+            handle: Long,
+            id: HsmKeyId,
+        ) = HsmKeyRef.EcPrivateKeyRef(handle)
     }
 
     object Aes : HsmKeyClass<HsmKeyRef.AesKeyRef>(Ck.CKO_SECRET_KEY, Ck.CKK_AES) {
-        override fun ref(handle: Long) = HsmKeyRef.AesKeyRef(handle)
+        override fun ref(
+            handle: Long,
+            id: HsmKeyId,
+        ) = HsmKeyRef.AesKeyRef(handle, id)
     }
 
     object GenericSecret : HsmKeyClass<HsmKeyRef.GenericSecretKeyRef>(Ck.CKO_SECRET_KEY, Ck.CKK_GENERIC_SECRET) {
-        override fun ref(handle: Long) = HsmKeyRef.GenericSecretKeyRef(handle)
+        override fun ref(
+            handle: Long,
+            id: HsmKeyId,
+        ) = HsmKeyRef.GenericSecretKeyRef(handle)
     }
 }
 

@@ -19,3 +19,6 @@ management:
       group:
         readiness:
           include: readinessState, r2dbc, hsm, rwscaWiHsm
+
+challenge:
+  symk-prefix: ${hsm.key-prefix}-rwscd_challenge_symk

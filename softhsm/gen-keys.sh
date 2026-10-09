@@ -59,6 +59,9 @@ mint_leaf() {
 
 gen_symkey rwscd_master_key
 gen_symkey rwscd_challenge_symk
+gen_symkey mdvm_challenge_symk
+gen_symkey wpb_challenge_symk
+gen_symkey pns_challenge_symk
 gen_symkey rwscd_pin_symk
 gen_symkey rwscd_aead_symk
 

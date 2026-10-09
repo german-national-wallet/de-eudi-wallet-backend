@@ -13,3 +13,6 @@ spring:
 info:
   application:
     name: EUDI-Wallet PNS backend service
+
+challenge:
+  symk-prefix: ${hsm.key-prefix}-pns_challenge_symk

@@ -5,10 +5,10 @@ import de.eudiwallet.backend.shared.hsm.HsmConfiguration
 import de.eudiwallet.backend.shared.hsm.HsmProvider
 import de.eudiwallet.backend.shared.keyrollover.AsymmetricSigningLineage
 import de.eudiwallet.backend.shared.keyrollover.CertifiedKey
+import de.eudiwallet.backend.shared.keyrollover.KeyRolloverMetrics
 import de.eudiwallet.backend.shared.keyrollover.KeySource
 import de.eudiwallet.backend.shared.keyrollover.stubCertifiedKeySource
 import de.eudiwallet.backend.shared.s3.S3CertChainProvider
-import de.eudiwallet.backend.shared.telemetry.MetricsService
 import kotlinx.coroutines.CoroutineDispatcher
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -130,7 +130,7 @@ class StatusListKeyProvider(
     private val s3CertChainProvider: S3CertChainProvider,
     private val ioDispatcher: CoroutineDispatcher,
     private val beanFactory: ConfigurableListableBeanFactory,
-    private val metricsService: MetricsService,
+    private val keyRolloverMetrics: KeyRolloverMetrics,
 ) {
     @Bean
     @Profile("!build-docs")
@@ -144,7 +144,7 @@ class StatusListKeyProvider(
                 hsmProvider = hsmProvider,
                 s3CertChainProvider = s3CertChainProvider,
                 ioDispatcher = ioDispatcher,
-                metricsService = metricsService,
+                keyRolloverMetrics = keyRolloverMetrics,
             ).also {
                 it.initialize()
                 beanFactory.registerSingleton("statusListSigner-${pool.id}", it)

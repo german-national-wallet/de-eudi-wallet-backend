@@ -8,13 +8,13 @@ import de.eudiwallet.backend.shared.hsm.HsmProvider
 import de.eudiwallet.backend.shared.hsm.SlotConfig
 import de.eudiwallet.backend.shared.keyrollover.AsymmetricSigningLineage
 import de.eudiwallet.backend.shared.keyrollover.CertifiedKey
+import de.eudiwallet.backend.shared.keyrollover.KeyRolloverMetrics
 import de.eudiwallet.backend.shared.keyrollover.KeySource
 import de.eudiwallet.backend.shared.keyrollover.SymmetricKeyLineage
 import de.eudiwallet.backend.shared.keyrollover.SymmetricKeySet
 import de.eudiwallet.backend.shared.keyrollover.stubCertifiedKeySource
 import de.eudiwallet.backend.shared.keyrollover.stubSymKeySource
 import de.eudiwallet.backend.shared.s3.S3CertChainProvider
-import de.eudiwallet.backend.shared.telemetry.MetricsService
 import kotlinx.coroutines.CoroutineDispatcher
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -66,71 +66,71 @@ class RwscaKeyProvider(
     private val rwscaWiHsmProvider: HsmProvider,
     private val s3CertChainProvider: S3CertChainProvider,
     private val ioDispatcher: CoroutineDispatcher,
-    private val metricsService: MetricsService,
+    private val keyRolloverMetrics: KeyRolloverMetrics,
 ) {
-    @Bean("rwscaMasterLineage")
+    @Bean("rwscdMasterLineage")
     @Profile("!build-docs")
-    fun rwscaMasterLineage(): SymmetricKeyLineage<HsmKeyRef.AesKeyRef> =
+    fun rwscdMasterLineage(): SymmetricKeyLineage<HsmKeyRef.AesKeyRef> =
         SymmetricKeyLineage(
-            "rwsca-master",
+            "rwscd-master",
             config.rwscdMasterKeyPrefix,
             HsmKeyClass.Aes,
             rwscaWiHsmProvider,
             ioDispatcher,
-            metricsService,
+            keyRolloverMetrics,
         ).also { it.initialize() }
 
-    @Bean("rwscaWteAuthLineage")
+    @Bean("rwscdWteAuthLineage")
     @Profile("!build-docs")
-    fun rwscaWteAuthLineage(): AsymmetricSigningLineage =
+    fun rwscdWteAuthLineage(): AsymmetricSigningLineage =
         AsymmetricSigningLineage(
-            name = "rwsca-wte-auth",
+            name = "rwscd-wte-auth",
             keyPrefix = config.rwscdWteAuthKeyPrefix,
             slotLabel = hsmConfiguration.slotLabel,
             trustAnchor = config.rwscdWteRootCert,
             hsmProvider = hsmProvider,
             s3CertChainProvider = s3CertChainProvider,
             ioDispatcher = ioDispatcher,
-            metricsService = metricsService,
+            keyRolloverMetrics = keyRolloverMetrics,
         ).also { it.initialize() }
 
-    @Bean("rwscaPinSymLineage")
+    @Bean("rwscdPinSymLineage")
     @Profile("!build-docs")
-    fun rwscaPinSymLineage(): SymmetricKeyLineage<HsmKeyRef.GenericSecretKeyRef> =
+    fun rwscdPinSymLineage(): SymmetricKeyLineage<HsmKeyRef.GenericSecretKeyRef> =
         SymmetricKeyLineage(
-            "rwsca-pin-symk",
+            "rwscd-pin-symk",
             config.rwscdPinSymkPrefix,
             HsmKeyClass.GenericSecret,
             hsmProvider,
             ioDispatcher,
-            metricsService,
+            keyRolloverMetrics,
         ).also { it.initialize() }
 
-    @Bean("rwscaAeadSymLineage")
+    @Bean("rwscdAeadSymLineage")
     @Profile("!build-docs")
-    fun rwscaAeadSymLineage(): SymmetricKeyLineage<HsmKeyRef.AesKeyRef> =
+    fun rwscdAeadSymLineage(): SymmetricKeyLineage<HsmKeyRef.AesKeyRef> =
         SymmetricKeyLineage(
-            "rwsca-aead-symk",
+            "rwscd-aead-symk",
             config.rwscdAeadSymkPrefix,
             HsmKeyClass.Aes,
             hsmProvider,
             ioDispatcher,
-            metricsService,
+            keyRolloverMetrics,
         ).also { it.initialize() }
 
-    @Bean("rwscaMasterLineage")
+    @Bean("rwscdMasterLineage")
     @Profile("build-docs")
-    fun docsRwscaMasterKeySource(): KeySource<SymmetricKeySet> = stubSymKeySource()
+    fun docsRwscdMasterKeySource(): KeySource<SymmetricKeySet> = stubSymKeySource()
 
-    @Bean("rwscaWteAuthLineage")
+    @Bean("rwscdWteAuthLineage")
     @Profile("build-docs")
-    fun docsRwscaWteAuthKeySource(): KeySource<CertifiedKey> = stubCertifiedKeySource()
+    fun docsRwscdWteAuthKeySource(): KeySource<CertifiedKey> = stubCertifiedKeySource()
 
-    @Bean("rwscaPinSymLineage")
+    @Bean("rwscdPinSymLineage")
     @Profile("build-docs")
-    fun docsRwscaPinSymKeySource(): KeySource<SymmetricKeySet> = stubSymKeySource()
+    fun docsRwscdPinSymKeySource(): KeySource<SymmetricKeySet> = stubSymKeySource()
 
-    @Bean("rwscaAeadSymLineage")
+    @Bean("rwscdAeadSymLineage")
     @Profile("build-docs")
-    fun docsRwscaAeadSymKeySource(): KeySource<SymmetricKeySet> = stubSymKeySource()
+    fun docsRwscdAeadSymKeySource(): KeySource<SymmetricKeySet> = stubSymKeySource()
 }

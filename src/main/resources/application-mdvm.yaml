@@ -12,3 +12,6 @@ spring:
 info:
   application:
     name: EUDI-Wallet MDVM backend service
+
+challenge:
+  symk-prefix: ${hsm.key-prefix}-mdvm_challenge_symk

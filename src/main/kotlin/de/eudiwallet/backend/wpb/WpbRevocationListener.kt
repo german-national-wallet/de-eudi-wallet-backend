@@ -1,9 +1,9 @@
 package de.eudiwallet.backend.wpb
 
+import de.eudiwallet.backend.shared.messaging.MessagingMetrics
 import de.eudiwallet.backend.shared.messaging.Module
 import de.eudiwallet.backend.shared.messaging.WalletInstanceRevocationEvent
 import de.eudiwallet.backend.shared.messaging.report
-import de.eudiwallet.backend.shared.telemetry.MetricsService
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.runBlocking
@@ -18,7 +18,7 @@ class WpbRevocationListener(
     private val wpbAccountService: WpbAccountService,
     private val json: Json,
     private val telemetryService: TelemetryService,
-    private val metricsService: MetricsService,
+    private val messagingMetrics: MessagingMetrics,
 ) {
     private val log = KotlinLogging.logger {}
 
@@ -27,7 +27,7 @@ class WpbRevocationListener(
         telemetryService.withSpanSync("WpbRevocationListener.onRevocation") {
             val event = json.decodeFromString<WalletInstanceRevocationEvent>(payload)
             runBlocking { wpbAccountService.revokeByWiHandle(event.wiHandle) }
-                .report(Module.WPB, event, metricsService, log)
+                .report(Module.WPB, event, messagingMetrics, log)
         }
     }
 }

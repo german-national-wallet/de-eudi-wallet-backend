@@ -12,7 +12,6 @@ import de.eudiwallet.backend.shared.hsm.pkcs11.Template
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.bouncycastle.crypto.ec.CustomNamedCurves
-import java.security.SecureRandom
 import java.security.interfaces.ECPublicKey
 import java.time.Instant
 import java.time.ZoneId
@@ -36,7 +35,8 @@ data class WrappedKeyPair(
 
 const val AES_TAG_BITS = 128L
 const val AES_TAG_BYTES = AES_TAG_BITS.toInt() / 8
-const val IV_BYTES = 12
+
+const val IV_BYTES = 16
 
 internal const val HSM_KEY_ID_ATTR = "hsm.key_id"
 internal const val HSM_KEY_LABEL_ATTR = "hsm.key_label"
@@ -49,16 +49,19 @@ data class EncryptedData(
     companion object {
         fun fromCipherData(
             data: ByteArray,
+            plainTextSize: Int,
             iv: ByteArray,
         ): EncryptedData {
-            if (data.size < AES_TAG_BYTES) {
+            if (data.size != plainTextSize + AES_TAG_BYTES) {
                 throw HsmException.EncryptionFailedException(
-                    IllegalStateException("Not enough encrypted data to contain authentication tag"),
+                    IllegalStateException(
+                        "Expected ${plainTextSize + AES_TAG_BYTES} bytes of ciphertext and tag, got ${data.size}",
+                    ),
                 )
             }
             return EncryptedData(
-                data.copyOfRange(0, data.size - AES_TAG_BYTES),
-                data.copyOfRange(data.size - AES_TAG_BYTES, data.size),
+                data.copyOfRange(0, plainTextSize),
+                data.copyOfRange(plainTextSize, data.size),
                 iv,
             )
         }
@@ -70,6 +73,8 @@ class HsmSession internal constructor(
     private val pkcs11: Pkcs11,
     val sessionHandle: Long,
     private val wrappingMechanism: Long,
+    private val slotLabel: String,
+    private val hsmMetrics: HsmMetrics,
     private val telemetryService: TelemetryService,
     private val onRelease: (HsmSession) -> Unit,
 ) {
@@ -82,8 +87,6 @@ class HsmSession internal constructor(
     )
 
     private val keyCache = HashMap<Pair<HsmKeyId, HsmKeyClass<*>>, CachedKey>()
-
-    private val secureRandom = SecureRandom()
 
     fun release() = onRelease(this)
 
@@ -289,20 +292,22 @@ class HsmSession internal constructor(
         additionalData: ByteArray?,
     ): EncryptedData =
         try {
-            val iv = ByteArray(IV_BYTES).also { secureRandom.nextBytes(it) }
-            val cipherData =
-                telemetryService.withSpanSync("session.encrypt") {
+            telemetryService.withSpanSync("session.encrypt") {
+                val iv =
+                    telemetryService.withSpanSync("session.generateRandom") {
+                        pkcs11.generateRandom(sessionHandle, IV_BYTES)
+                    }
+                val plainText = data ?: ByteArray(0)
+                hsmMetrics.countHsmAeadEncryption(slotLabel, key.id.value)
+                val cipherData =
                     pkcs11.encrypt(
                         sessionHandle,
                         Mechanism.AesGcm(iv, additionalData, AES_TAG_BITS),
                         key.handle,
-                        data ?: ByteArray(0),
+                        plainText,
                     )
-                }
-            if (iv.all { it == 0.toByte() }) {
-                throw HsmException.EncryptionFailedException(IllegalStateException("HSM wrote back an all-zero IV"))
+                EncryptedData.fromCipherData(cipherData, plainText.size, iv)
             }
-            EncryptedData.fromCipherData(cipherData, iv)
         } catch (e: Pkcs11Exception) {
             throw HsmException.EncryptionFailedException(e)
         }
@@ -354,12 +359,8 @@ class HsmSession internal constructor(
                 throw HsmException.KeyLookupFailure(keyId.value, ex)
             }.firstOrNull() ?: throw HsmException.KeyNotFoundException(keyId.value)
         val attributes = readAttributes(handle, keyId.value, Ck.CKA_ID, Ck.CKA_LABEL)
-        val key =
-            CachedKey(
-                keyClass.ref(handle),
-                attributes.bytes(Ck.CKA_ID)?.let { HsmKeyId.from(it) } ?: keyId,
-                attributes.string(Ck.CKA_LABEL),
-            )
+        val id = attributes.bytes(Ck.CKA_ID)?.let { HsmKeyId.from(it) } ?: keyId
+        val key = CachedKey(keyClass.ref(handle, id), id, attributes.string(Ck.CKA_LABEL))
         keyCache[keyId to keyClass] = key
         return key
     }

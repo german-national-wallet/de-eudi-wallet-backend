@@ -12,10 +12,8 @@
     </appender>
 
     <appender name="CONSOLE-JSON" class="ch.qos.logback.core.ConsoleAppender">
-        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
-            <level>INFO</level>
-        </filter>
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeContext>false</includeContext>
             <customFields>{"serviceVersion":"${SERVICE_VERSION}"}</customFields>
         </encoder>
     </appender>

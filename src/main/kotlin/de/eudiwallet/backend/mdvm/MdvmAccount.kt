@@ -95,7 +95,9 @@ data class MdvmAccount(
     }
 }
 
-sealed interface DeviceInfo
+sealed interface DeviceInfo {
+    fun loggingInfo(): Map<String, String>
+}
 
 @Serializable
 data class AndroidDeviceInfo(
@@ -105,7 +107,9 @@ data class AndroidDeviceInfo(
     val hardware: String,
     val versionPatch: String,
     val versionRelease: String,
-) : DeviceInfo
+) : DeviceInfo {
+    override fun loggingInfo(): Map<String, String> = emptyMap()
+}
 
 @Serializable
 data class IosDeviceInfo(
@@ -114,7 +118,19 @@ data class IosDeviceInfo(
     val uname: String,
     val osVersion: String,
     val systemVersion: String,
-) : DeviceInfo
+) : DeviceInfo {
+    override fun loggingInfo(): Map<String, String> =
+        mapOf(
+            "mdvm.model" to (hardwareModel ?: model),
+            "mdvm.systemVersion" to systemVersion,
+        )
+
+    fun metricDimensions(): DeviceMetricDimensions =
+        DeviceMetricDimensions.Ios(
+            model = hardwareModel ?: model,
+            systemVersion = systemVersion,
+        )
+}
 
 @Serializable
 data class AndroidPackageInfo(
@@ -138,6 +154,15 @@ data class AndroidAttestationDetails(
     val verifiedBootKeyDigest: String? = null,
     val packageInfo: AndroidPackageInfo? = null,
 ) {
+    fun loggingInfo(): Map<String, String> =
+        mapOf(
+            "mdvm.attestationIdModel" to (attestationIdModel ?: "unknown"),
+            "mdvm.attestationIdProduct" to (attestationIdProduct ?: "unknown"),
+            "mdvm.attestationIdDevice" to (attestationIdDevice ?: "unknown"),
+            "mdvm.osVersion" to (osVersion ?: "unknown"),
+            "mdvm.osPatchLevel" to (osPatchLevel ?: "unknown"),
+        )
+
     companion object {
         fun AttestationKeyDescription.toAndroidAttestationDetails(
             allowSoftwareAttestation: Boolean,
@@ -182,6 +207,15 @@ data class AndroidAttestationDetails(
         private fun AuthorizationList.OsPatchLevel.asString() = "$year.${month.number.toString().padStart(2, '0')}"
     }
 }
+
+fun AndroidAttestationDetails?.metricDimensions(): DeviceMetricDimensions =
+    DeviceMetricDimensions.Android(
+        attestationIdModel = this?.attestationIdModel,
+        attestationIdProduct = this?.attestationIdProduct,
+        attestationIdDevice = this?.attestationIdDevice,
+        osVersion = this?.osVersion,
+        osPatchLevel = this?.osPatchLevel,
+    )
 
 data class AndroidDeviceAttestationData(
     val attestationDetails: AndroidAttestationDetails,

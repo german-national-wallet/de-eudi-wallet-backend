@@ -4,6 +4,7 @@ x-app-env: &app-env
   DB_PORT: 5432
   DB_USER: postgres
   DB_PASS: password
+  DB_SSL_MODE: disable
   S3_ENDPOINT: http://s3:9000
   S3_REGION: us-east-1
   S3_BUCKET: dev-certs

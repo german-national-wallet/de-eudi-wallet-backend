@@ -17,11 +17,11 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
-    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${DB_SSL_MODE:disable}&sslrootcert=${DB_SSL_ROOT_CERT:}&sslcert=${DB_SSL_CERT:}&sslkey=${DB_SSL_KEY:}
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${DB_SSL_MODE}&sslrootcert=${DB_SSL_ROOT_CERT:}&sslcert=${DB_SSL_CERT:}&sslkey=${DB_SSL_KEY:}
     user: ${DB_USER}
     password: ${DB_PASS}
   r2dbc:
-    url: r2dbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?sslMode=${DB_SSL_MODE:disable}&sslRootCert=${DB_SSL_ROOT_CERT:}&sslCert=${DB_SSL_CERT:}&sslKey=${DB_SSL_KEY:}
+    url: r2dbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?sslMode=${DB_SSL_MODE}&sslRootCert=${DB_SSL_ROOT_CERT:}&sslCert=${DB_SSL_CERT:}&sslKey=${DB_SSL_KEY:}
     username: ${DB_USER}
     password: ${DB_PASS}
     pool:
@@ -63,6 +63,9 @@ spring:
       include-stacktrace: never
       include-binding-errors: never
       include-exception: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.security.autoconfigure.ReactiveUserDetailsServiceAutoConfiguration
 
 server:
   shutdown: graceful
@@ -70,7 +73,7 @@ server:
 deployment:
   environment:
 
-api-contract-version: 15.2.0
+api-contract-version: 15.3.0
 
 info:
   application:
@@ -106,9 +109,6 @@ springdoc:
 
 hsm:
   key-prefix: ${deployment.environment}
-
-challenge:
-  rwscd-challenge-symk-prefix: ${hsm.key-prefix}-rwscd_challenge_symk
 
 mdvm-token:
   issuer: german-national-wallet:mdvm:${deployment.environment}

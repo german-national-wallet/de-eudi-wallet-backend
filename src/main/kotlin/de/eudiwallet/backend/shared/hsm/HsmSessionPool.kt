@@ -4,8 +4,6 @@ import de.eudiwallet.backend.shared.hsm.pkcs11.Ck
 import de.eudiwallet.backend.shared.hsm.pkcs11.Pkcs11
 import de.eudiwallet.backend.shared.hsm.pkcs11.Pkcs11Exception
 import de.eudiwallet.backend.shared.hsm.pkcs11.Pkcs11Ffm
-import de.eudiwallet.backend.shared.telemetry.HsmRetryOutcome
-import de.eudiwallet.backend.shared.telemetry.MetricsService
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineDispatcher
@@ -29,7 +27,7 @@ class HsmSessionPool(
     private val defaultBorrowTimeout: Duration,
     private val sessions: List<HsmSession>,
     private val dispatcher: CoroutineDispatcher,
-    private val metricsService: MetricsService,
+    private val hsmMetrics: HsmMetrics,
     private val callerDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     internal val channel =
@@ -52,13 +50,13 @@ class HsmSessionPool(
                 for (attempt in 1..SESSION_ATTEMPTS) {
                     try {
                         val result = withContext(dispatcher) { block(session) }
-                        if (attempt > 1) metricsService.countHsmSessionRetry(slotLabel, HsmRetryOutcome.RECOVERED)
+                        if (attempt > 1) hsmMetrics.countHsmSessionRetry(slotLabel, HsmRetryOutcome.RECOVERED)
                         return@withContext result
                     } catch (ex: CancellationException) {
                         throw ex
                     } catch (ex: Exception) {
                         if (!impairsSession(ex) || attempt == SESSION_ATTEMPTS) {
-                            if (attempt > 1) metricsService.countHsmSessionRetry(slotLabel, HsmRetryOutcome.EXHAUSTED)
+                            if (attempt > 1) hsmMetrics.countHsmSessionRetry(slotLabel, HsmRetryOutcome.EXHAUSTED)
                             throw ex
                         }
                         logImpairment(ex, attempt)
@@ -73,7 +71,7 @@ class HsmSessionPool(
 
     private fun impairsSession(ex: Exception): Boolean {
         val failure = ex.pkcs11Cause() ?: return false
-        metricsService.countHsmPkcs11Error(slotLabel, failure.function, Ck.returnValueName(failure.rv))
+        hsmMetrics.countHsmPkcs11Error(slotLabel, failure)
         return failure.rv in SESSION_IMPAIRED_RVS
     }
 
@@ -93,7 +91,7 @@ class HsmSessionPool(
             try {
                 borrow(Duration.ZERO)
             } catch (_: HsmException.GetSessionFailedException) {
-                metricsService.countHsmSessionRetry(slotLabel, HsmRetryOutcome.NO_FREE_SESSION)
+                hsmMetrics.countHsmSessionRetry(slotLabel, HsmRetryOutcome.NO_FREE_SESSION)
                 throw impairment
             }
         impaired.release()
@@ -155,10 +153,17 @@ class HsmSessionPool(
             wrappingMechanism: Long,
             borrowTimeout: Duration,
             telemetryService: TelemetryService,
-            metricsService: MetricsService,
+            hsmMetrics: HsmMetrics,
         ): HsmSessionPool =
             pools.computeIfAbsent(slot.label) {
-                create(slot, moduleLibrary, wrappingMechanism, borrowTimeout, telemetryService, metricsService)
+                create(
+                    slot,
+                    moduleLibrary,
+                    wrappingMechanism,
+                    borrowTimeout,
+                    telemetryService,
+                    hsmMetrics,
+                )
             }
 
         private fun create(
@@ -167,7 +172,7 @@ class HsmSessionPool(
             wrappingMechanism: Long,
             borrowTimeout: Duration,
             telemetryService: TelemetryService,
-            metricsService: MetricsService,
+            hsmMetrics: HsmMetrics,
         ): HsmSessionPool {
             val pkcs11: Pkcs11
             val sessions: List<Long> =
@@ -201,6 +206,8 @@ class HsmSessionPool(
                         pkcs11,
                         it,
                         wrappingMechanism,
+                        slot.label,
+                        hsmMetrics,
                         telemetryService,
                         onRelease = { hsmSession -> pool.release(hsmSession) },
                     )
@@ -211,7 +218,7 @@ class HsmSessionPool(
                     Thread.ofPlatform().name("hsm-${slot.label.trim()}-", 1).daemon().factory(),
                 )
             val dispatcher = workers.asCoroutineDispatcher()
-            pool = HsmSessionPool(slot.label, slot.poolSize, borrowTimeout, hsmSessions, dispatcher, metricsService)
+            pool = HsmSessionPool(slot.label, slot.poolSize, borrowTimeout, hsmSessions, dispatcher, hsmMetrics)
             Runtime.getRuntime().addShutdownHook(
                 Thread {
                     if (!pool.close(SHUTDOWN_DRAIN_TIMEOUT)) {

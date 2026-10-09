@@ -27,8 +27,8 @@ const val ISO_18045_HIGH_VALUE = "iso_18045_high"
 @Component
 class WalletTrustEvidenceBuilder(
     private val rwscaConfiguration: RwscaConfiguration,
-    @Qualifier("rwscaWteAuthLineage")
-    private val rwscaWteAuthLineage: KeySource<CertifiedKey>,
+    @Qualifier("rwscdWteAuthLineage")
+    private val rwscdWteAuthLineage: KeySource<CertifiedKey>,
     private val ecdsaSigner: HsmEcdsaSigner,
 ) {
     companion object Companion {
@@ -45,7 +45,7 @@ class WalletTrustEvidenceBuilder(
     ): WalletTrustEvidence = WalletTrustEvidence(attestedKeys, wteNonce)
 
     suspend fun WalletTrustEvidence.serializeToJwt(): String {
-        val certifiedKey = rwscaWteAuthLineage.current()
+        val certifiedKey = rwscdWteAuthLineage.current()
 
         val header =
             JWSHeader.Builder(JWSAlgorithm.ES256)

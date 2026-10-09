@@ -77,6 +77,8 @@ private const val CONTENT_LENGTH_EXCEEDED =
 private const val INTERNAL_SERVER_ERROR = """| 500 | `INTERNAL_SERVER_ERROR` | Generic error |"""
 private const val DB_UNAVAILABLE = """| 503 | `DB_UNAVAILABLE` | Database unavailable |"""
 private const val HSM_UNAVAILABLE = """| 503 | `HSM_UNAVAILABLE` | HSM unavailable |"""
+private const val MESSAGING_UNAVAILABLE =
+    """| 503 | `MESSAGING_UNAVAILABLE` | Messaging is disabled or unavailable |"""
 
 internal const val CHALLENGE_DOCS = """
 No signatures required.
@@ -209,4 +211,19 @@ $GENERIC_BAD_REQUEST
 $INTERNAL_SERVER_ERROR
 $DB_UNAVAILABLE
 $HSM_UNAVAILABLE
+"""
+
+internal const val REVOKE_VULNERABLE_DEVICE_CLASSES_DOCS = """
+No signatures required. Not exposed to Wallet Instances: the gateway uses special authentication for it — an operations
+endpoint.
+
+Verifies the stored device data of every non-revoked account against the configured vulnerable device class lists and
+revokes accounts which have unfixable vulnerabilities.
+
+| HTTP Status | Error Code | Description |
+|---|---|---|
+$GENERIC_BAD_REQUEST
+$MESSAGING_UNAVAILABLE
+$INTERNAL_SERVER_ERROR
+$DB_UNAVAILABLE
 """

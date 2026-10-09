@@ -1,6 +1,9 @@
 package de.eudiwallet.backend.mdvm
 
+import at.asitplus.attestation.TrustedRootPair
+import at.asitplus.attestation.android.TrustedRoot
 import com.vdurmont.semver4j.Semver
+import de.eudiwallet.backend.shared.crypto.readX509Cert
 import de.eudiwallet.backend.shared.json.fromJson
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.Serializable
@@ -18,10 +21,13 @@ class IOSIntegrityConfig(
     val minimalBuildNumber: String,
     val vulnerableClassesResource: Resource? = ClassPathResource("ios/vulnerable_device_classes.json"),
     val counterJumpLoggingThreshold: Long,
+    val additionalTrustedRoot: Resource? = null,
 ) {
     private val log = KotlinLogging.logger {}
 
     val vulnerableClassEntries: List<VulnerableIosDeviceClassEntry> = loadVulnerableClasses()
+
+    val additionalTrustedRootPair: Set<TrustedRootPair> = loadAdditionalTrustedRootPair()
 
     private fun loadVulnerableClasses(): List<VulnerableIosDeviceClassEntry> {
         val resource = vulnerableClassesResource
@@ -38,6 +44,23 @@ class IOSIntegrityConfig(
         }
 
         return vulnerableClasses.entries.onEach { entry -> entry.verify() }
+    }
+
+    private fun loadAdditionalTrustedRootPair(): Set<TrustedRootPair> {
+        if (additionalTrustedRoot == null) {
+            return emptySet()
+        }
+        val certificate = readX509Cert(additionalTrustedRoot)
+        log.warn {
+            "Trusting an additional App Attest root from ${additionalTrustedRoot.description}: " +
+                "${certificate.subjectX500Principal.name}. This must never be set in production."
+        }
+        return setOf(
+            TrustedRootPair(
+                TrustedRoot.Certificate(certificate),
+                TrustedRoot.Certificate(certificate),
+            ),
+        )
     }
 }
 

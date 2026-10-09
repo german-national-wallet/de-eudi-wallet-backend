@@ -5,8 +5,8 @@ import de.eudiwallet.backend.shared.hsm.HsmKeyClass
 import de.eudiwallet.backend.shared.hsm.HsmKeyId
 import de.eudiwallet.backend.shared.hsm.HsmKeyRef
 import de.eudiwallet.backend.shared.hsm.HsmProvider
+import de.eudiwallet.backend.shared.hsm.findNextKey
 import de.eudiwallet.backend.shared.hsm.findPrimaryKey
-import de.eudiwallet.backend.shared.telemetry.MetricsService
 import de.eudiwallet.backend.shared.telemetry.runBlockingWithTelemetry
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineDispatcher
@@ -30,7 +30,7 @@ class SymmetricKeyLineage<T : HsmKeyRef>(
     private val keyClass: HsmKeyClass<T>,
     private val hsmProvider: HsmProvider,
     private val ioDispatcher: CoroutineDispatcher,
-    private val metricsService: MetricsService,
+    private val keyRolloverMetrics: KeyRolloverMetrics,
     private val clock: Clock = Clock.systemDefaultZone(),
 ) : RefreshableLineage,
     KeySource<SymmetricKeySet> {
@@ -51,7 +51,9 @@ class SymmetricKeyLineage<T : HsmKeyRef>(
 
     private fun roll(failFast: Boolean) {
         val keys = scanKeys()
-        val primary = keys.findPrimaryKey(Instant.now(clock))
+        val now = Instant.now(clock)
+        if (keys.isNotEmpty()) keyRolloverMetrics.setNextKey(name, keys.findNextKey(now))
+        val primary = keys.findPrimaryKey(now)
         if (primary == null) {
             check(!failFast) { "$name primary key not found for prefix '$keyPrefix'" }
             logHoldingLastGood()
@@ -60,9 +62,12 @@ class SymmetricKeyLineage<T : HsmKeyRef>(
 
         val candidate = SymmetricKeySet(keys, primary)
         val previous = held.getAndSet(candidate)
-        metricsService.setPrimaryKeyExpiryDate(name, primary.endDate)
+        keyRolloverMetrics.setPrimaryKeyExpiryDate(name, primary, primary.endDate)
         if (previous != null && previous.primaryId != candidate.primaryId) {
-            log.info { "$name: rolled over ${previous.primaryId} -> ${candidate.primaryId}" }
+            log.info {
+                "$name: rolled over ${previous.primary.label} (${previous.primaryId.value}) -> " +
+                    "${primary.label} (${primary.keyId.value})"
+            }
         }
     }
 

@@ -86,4 +86,9 @@ internal interface Pkcs11 {
         key: Long,
         data: ByteArray,
     ): ByteArray
+
+    fun generateRandom(
+        session: Long,
+        length: Int,
+    ): ByteArray
 }

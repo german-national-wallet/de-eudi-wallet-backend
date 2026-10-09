@@ -355,19 +355,23 @@ class MdvmService(
     }
 
     private fun verifyAndroidVulnerableDeviceClass(details: AndroidAttestationDetails) {
-        androidConfig.vulnerableClassEntries.forEach { entry ->
-            val affectedClass =
-                entry.affectedClasses.firstOrNull { it.affects(details) && !it.isFixedOn(details) }
-            if (affectedClass != null) {
-                throw AndroidKeyAttestationException.VulnerableDeviceClass(
-                    entry.id,
-                    entry.classification,
-                    affectedClass.fixingPatchLevel,
-                    details.osPatchLevel,
-                )
-            }
-        }
+        val (entry, affectedClass) = findAndroidVulnerableDeviceClass(details) ?: return
+        throw AndroidKeyAttestationException.VulnerableDeviceClass(
+            entry.id,
+            entry.classification,
+            affectedClass.fixingPatchLevel,
+            details.osPatchLevel,
+        )
     }
+
+    fun findAndroidVulnerableDeviceClass(
+        details: AndroidAttestationDetails,
+    ): Pair<VulnerableAndroidDeviceClassEntry, AffectedAndroidDeviceClass>? =
+        androidConfig.vulnerableClassEntries.firstNotNullOfOrNull { entry ->
+            entry.affectedClasses
+                .firstOrNull { it.affects(details) && !it.isFixedOn(details) }
+                ?.let { entry to it }
+        }
 
     private fun verifyAndroidDevicePlausibility(
         attestedDetails: AndroidAttestationDetails,
@@ -494,19 +498,24 @@ class MdvmService(
     }
 
     private fun verifyIosVulnerableDeviceClass(requestedDeviceClass: IosDeviceInfo) {
-        val deviceModel = requestedDeviceClass.hardwareModel
-        val deviceVersion = requestedDeviceClass.parsedSystemVersion()
-        iosConfig.vulnerableClassEntries.forEach { entry ->
-            val affectedClass =
-                entry.affectedClasses.firstOrNull { it.affects(deviceModel) && !it.isFixedOn(deviceVersion) }
-            if (affectedClass != null) {
-                throw IosKeyAttestationException.VulnerableDeviceClass(
-                    entry.id,
-                    entry.classification,
-                    affectedClass.fixingOsVersion,
-                    requestedDeviceClass.systemVersion,
-                )
-            }
+        val (entry, affectedClass) = findIosVulnerableDeviceClass(requestedDeviceClass) ?: return
+        throw IosKeyAttestationException.VulnerableDeviceClass(
+            entry.id,
+            entry.classification,
+            affectedClass.fixingOsVersion,
+            requestedDeviceClass.systemVersion,
+        )
+    }
+
+    fun findIosVulnerableDeviceClass(
+        deviceClass: IosDeviceInfo,
+    ): Pair<VulnerableIosDeviceClassEntry, AffectedIosDeviceClass>? {
+        val deviceModel = deviceClass.hardwareModel
+        val deviceVersion = deviceClass.parsedSystemVersion()
+        return iosConfig.vulnerableClassEntries.firstNotNullOfOrNull { entry ->
+            entry.affectedClasses
+                .firstOrNull { it.affects(deviceModel) && !it.isFixedOn(deviceVersion) }
+                ?.let { entry to it }
         }
     }
 

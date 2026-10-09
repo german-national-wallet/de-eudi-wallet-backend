@@ -44,6 +44,8 @@ internal object Ck {
     const val CKM_AES_KEY_WRAP = 0x2109L
     const val CKM_AES_KEY_WRAP_PAD = 0x210aL
 
+    const val THALES_AES_KWP = 0x80000171L
+
     const val CKR_OK = 0L
     const val CKR_BUFFER_TOO_SMALL = 0x150L
     const val CKR_CRYPTOKI_ALREADY_INITIALIZED = 0x191L

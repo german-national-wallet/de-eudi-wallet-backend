@@ -4,9 +4,12 @@ import at.asitplus.attestation.IosAttestationConfiguration
 import at.asitplus.attestation.Makoto
 import at.asitplus.attestation.android.AndroidAttestationConfiguration
 import at.asitplus.attestation.android.AndroidRevocationList
+import at.asitplus.attestation.android.GOOGLE_DEFAULT_HARDWARE_TRUST_ANCHORS
 import at.asitplus.attestation.android.PatchLevel
+import at.asitplus.attestation.android.TrustedRoot
 import at.asitplus.attestation.android.parseHex
 import com.vdurmont.semver4j.Semver
+import de.eudiwallet.backend.shared.crypto.readX509Cert
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -39,6 +42,8 @@ class MakotoConfiguration(
                             )
                         },
                     attestationStatementValiditySeconds = 1.hours.inWholeSeconds,
+                    hardwareTrustedRoots =
+                        GOOGLE_DEFAULT_HARDWARE_TRUST_ANCHORS + androidConfig.additionalTrustedRoot.loadTrustedRoot(),
                     androidVersion = androidConfig.minimalAndroidVersion.androidVersionAsNumber(),
                     patchLevel = androidConfig.patchLevelFreshness.asPatchLevel(),
                     allowBootloaderUnlock = false,
@@ -70,12 +75,26 @@ class MakotoConfiguration(
         )
 
     private fun List<String>.asAppData(isProduction: Boolean) =
-        map { bundle ->
-            IosAttestationConfiguration.AppData(
-                teamIdentifier = iosConfig.appId,
-                bundleIdentifier = bundle,
-                sandbox = !isProduction,
-            )
+        flatMap { bundle ->
+            buildList {
+                if (iosConfig.additionalTrustedRootPair.isNotEmpty()) {
+                    add(
+                        IosAttestationConfiguration.AppData(
+                            teamIdentifier = iosConfig.appId,
+                            bundleIdentifier = bundle,
+                            sandbox = !isProduction,
+                            trustedRootOverrides = iosConfig.additionalTrustedRootPair,
+                        ),
+                    )
+                }
+                add(
+                    IosAttestationConfiguration.AppData(
+                        teamIdentifier = iosConfig.appId,
+                        bundleIdentifier = bundle,
+                        sandbox = !isProduction,
+                    ),
+                )
+            }
         }
 
     @Suppress("MagicNumber")
@@ -85,6 +104,18 @@ class MakotoConfiguration(
     }
 
     private fun Int.asPatchLevel() = PatchLevel(YearMonth.now().minusMonths(this.toLong()))
+
+    private fun Resource?.loadTrustedRoot(): Set<TrustedRoot> =
+        if (this != null) {
+            val certificate = readX509Cert(this)
+            log.warn {
+                "Trusting an additional Android key attestation root from $description: " +
+                    "${certificate.subjectX500Principal.name}. This must never be set in production."
+            }
+            setOf(TrustedRoot.Certificate(certificate))
+        } else {
+            emptySet()
+        }
 
     private fun Resource?.loadAndroidRevocationList(): AndroidRevocationList =
         if (this != null) {

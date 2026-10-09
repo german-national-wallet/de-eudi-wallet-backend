@@ -13,6 +13,9 @@ spring:
       - classpath:migration/wpb
       - classpath:migration/pns
 
+challenge:
+  symk-prefix: ${hsm.key-prefix}-rwscd_challenge_symk
+
 management:
   endpoint:
     health:

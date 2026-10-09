@@ -29,8 +29,8 @@ data class PinSessionToken(
 
 @Component
 class PinSessionTokenBuilder(
-    @Qualifier("rwscaPinSymLineage")
-    private val rwscaPinSymLineage: KeySource<SymmetricKeySet>,
+    @Qualifier("rwscdPinSymLineage")
+    private val rwscdPinSymLineage: KeySource<SymmetricKeySet>,
     private val rwscaConfiguration: RwscaConfiguration,
     private val hsmSigner: HsmHmacSigner,
     private val hsmVerifier: HsmHmacVerifier,
@@ -57,7 +57,7 @@ class PinSessionTokenBuilder(
             jwt.validateType(JWT_TYPE)
             jwt.validateExpirationTime()
             jwt.validateIssuer(rwscaConfiguration.issuer)
-            val keyId = jwt.validatedKeyId(rwscaPinSymLineage.current().validKeys.map { it.keyId.value })
+            val keyId = jwt.validatedKeyId(rwscdPinSymLineage.current().validKeys.map { it.keyId.value })
             hsmVerifier.verify(jwt, HsmKeyId(keyId))
             return PinSessionToken(
                 jwt.jwtClaimsSet.expirationTime.toInstant(),
@@ -69,7 +69,7 @@ class PinSessionTokenBuilder(
     }
 
     suspend fun PinSessionToken.serializeToJwt(): String {
-        val primaryId = rwscaPinSymLineage.current().primaryId
+        val primaryId = rwscdPinSymLineage.current().primaryId
 
         val header =
             JWSHeader.Builder(JWSAlgorithm.HS256)

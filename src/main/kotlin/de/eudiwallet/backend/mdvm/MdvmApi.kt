@@ -47,6 +47,7 @@ const val WI_DEVICE_CLASS_FIELD = "wi_device_class"
 const val WI_ANDROID_KEY_ATTESTATION_FIELD = "wi_android_key_attestation"
 const val WI_MDVM_AUTH_PUBK_FIELD = "wi_mdvm_auth_pubk"
 const val PAP_DEVICECHECK_ATTESTATION_FIELD = "pap_devicecheck_attestation"
+
 const val PAP_DEVICECHECK_ASSERTION_FIELD = "pap_devicecheck_assertion"
 
 const val MDVM_WI_ID_FIELD = "mdvm_wi_id"

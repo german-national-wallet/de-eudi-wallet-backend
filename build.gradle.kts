@@ -101,6 +101,7 @@ dependencies {
         exclude(group = "io.swagger.core.v3", module = "swagger-models")
     }
     testImplementation(libs.archunit.junit5)
+    testImplementation(libs.jackson.dataformat.cbor)
     testImplementation(libs.okhttp.mockwebserver)
 
     gatlingImplementation(libs.spring.boot.starter.webflux)

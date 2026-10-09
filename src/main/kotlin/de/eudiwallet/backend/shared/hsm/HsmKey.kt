@@ -48,5 +48,10 @@ fun List<HsmKey>.findActiveKeys(validityDate: Instant): List<HsmKey> {
 
 fun List<HsmKey>.findPrimaryKey(validityDate: Instant): HsmKey? = findActiveKeys(validityDate).firstOrNull()
 
+fun List<HsmKey>.findNextKey(validityDate: Instant): HsmKey? {
+    val on = validityDate.atZone(TimeZone.getDefault().toZoneId()).toLocalDate()
+    return this.filter { it.startDate.isAfter(on) }.minByOrNull { it.startDate }
+}
+
 fun HsmKey.certObjectKey(slotLabel: String): String =
     "$slotLabel/${label.removeSuffix(HSM_PRIVATE_KEY_LABEL_SUFFIX)}.pem"

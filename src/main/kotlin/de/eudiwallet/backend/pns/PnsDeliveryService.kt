@@ -1,8 +1,6 @@
 package de.eudiwallet.backend.pns
 
 import de.eudiwallet.backend.shared.messaging.PushNotificationEvent
-import de.eudiwallet.backend.shared.telemetry.MetricsService
-import de.eudiwallet.backend.shared.telemetry.PushMetricOutcome
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.serialization.SerializationException
@@ -15,7 +13,7 @@ import java.util.UUID
 class PnsDeliveryService(
     private val repository: PnsRepository,
     private val mppPushClient: MppPushClient,
-    private val metricsService: MetricsService,
+    private val pnsMetrics: PnsMetrics,
     private val telemetryService: TelemetryService,
 ) {
     private val log = KotlinLogging.logger {}
@@ -26,22 +24,22 @@ class PnsDeliveryService(
             val registration = repository.findByAccountId(accountId)
             if (registration == null) {
                 log.info { "Account $accountId has no push registration, dropping push notification ${event.eventId}" }
-                metricsService.countPushNotification(PushMetricOutcome.NO_REGISTRATION)
+                pnsMetrics.countPushNotification(PushMetricOutcome.NO_REGISTRATION)
                 return@withSpan
             }
             when (val outcome = mppPushClient.send(registration.mppRegistrationToken, event.toPushNotification())) {
                 is PushOutcome.Delivered -> {
-                    metricsService.countPushNotification(PushMetricOutcome.DELIVERED)
+                    pnsMetrics.countPushNotification(PushMetricOutcome.DELIVERED)
                     log.debug { "Delivered push notification ${event.eventId} as ${outcome.messageId}" }
                 }
 
                 is PushOutcome.Terminal -> {
-                    metricsService.countPushNotification(PushMetricOutcome.TERMINAL)
+                    pnsMetrics.countPushNotification(PushMetricOutcome.TERMINAL)
                     log.warn { "Dropping push notification ${event.eventId} for $accountId: ${outcome.reason}" }
                 }
 
                 is PushOutcome.Transient -> {
-                    metricsService.countPushNotification(PushMetricOutcome.TRANSIENT)
+                    pnsMetrics.countPushNotification(PushMetricOutcome.TRANSIENT)
                     throw PushDeliveryUnavailableException(event.eventId, outcome.reason)
                 }
             }
