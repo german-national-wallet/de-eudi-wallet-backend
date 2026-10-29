@@ -7,7 +7,7 @@ enum class WalletInstanceRevocationOutcome {
 
     ALREADY_REVOKED,
 
-    UNKNOWN_HANDLE,
+    UNKNOWN_ACCOUNT,
 }
 
 internal fun WalletInstanceRevocationOutcome.report(
@@ -18,12 +18,12 @@ internal fun WalletInstanceRevocationOutcome.report(
 ) {
     messagingMetrics.countWalletRevocationConsumed(module, this)
     when (this) {
-        WalletInstanceRevocationOutcome.UNKNOWN_HANDLE -> {
-            log.warn { "Revocation ${event.eventId}: $this for WI handle ${event.wiHandle}" }
+        WalletInstanceRevocationOutcome.UNKNOWN_ACCOUNT -> {
+            log.warn { "Revocation ${event.eventId} (${event.reason}): $this for MDVM account ${event.mdvmWiId}" }
         }
 
         else -> {
-            log.info { "Revocation ${event.eventId}: $this" }
+            log.info { "Revocation ${event.eventId} (${event.reason}): $this" }
         }
     }
 }

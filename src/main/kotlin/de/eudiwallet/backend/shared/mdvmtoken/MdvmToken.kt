@@ -73,14 +73,16 @@ class MdvmTokenParser(
             jwt.validateType(MdvmToken.JWT_TYPE)
             jwt.validateAlgorithm(JWSAlgorithm.ES256)
             jwt.validateIssuer(mdvmConfiguration.issuer)
-            jwt.validateExpirationTime()
             val certificate = jwt.validateCertificateChain(mdvmConfiguration.mdvmRootCert)
             jwt.validateEcdsaSignature(certificate.publicKey as ECPublicKey)
+            jwt.validateExpirationTime()
             return MdvmToken(
                 authKey = jwt.getConfirmationKey(),
                 mdvmAccountId = MdvmAccountId(jwt.getUUIDClaim(MDVM_WI_ID_CLAIM)),
                 expirationTime = jwt.jwtClaimsSet.expirationTime.toInstant(),
             )
+        } catch (e: JwtException.Expired) {
+            throw MdvmTokenExpiredException(e)
         } catch (e: JwtException) {
             throw MdvmTokenVerificationException(e)
         } catch (e: ClassCastException) {

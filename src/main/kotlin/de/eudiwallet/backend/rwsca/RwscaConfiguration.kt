@@ -36,15 +36,13 @@ class RwscaConfiguration(
     val wiSlot: SlotConfig,
     val pinRetry: PinRetryConfigurationProperties = PinRetryConfigurationProperties(),
 ) {
-    val rwscdWteRootCert: X509Certificate by lazy {
-        readX509Cert(rwscdWteRootCertPath).apply { checkValidity() }
-    }
+    val rwscdWteRootCert: X509Certificate = readX509Cert(rwscdWteRootCertPath).apply { checkValidity() }
 
     @Suppress("MagicNumber")
     val pinSessionTokenExpireAfter: Duration = Duration.ofMinutes(5)
 
     @Suppress("MagicNumber")
-    val wteExpireAfter: Duration = Duration.ofDays(1)
+    val wteExpireAfter: Duration = Duration.ofMinutes(10)
 }
 
 @Suppress("MagicNumber")
@@ -74,7 +72,7 @@ class RwscaKeyProvider(
         SymmetricKeyLineage(
             "rwscd-master",
             config.rwscdMasterKeyPrefix,
-            HsmKeyClass.Aes,
+            HsmKeyClass.AesKeyWrap,
             rwscaWiHsmProvider,
             ioDispatcher,
             keyRolloverMetrics,
@@ -112,7 +110,7 @@ class RwscaKeyProvider(
         SymmetricKeyLineage(
             "rwscd-aead-symk",
             config.rwscdAeadSymkPrefix,
-            HsmKeyClass.Aes,
+            HsmKeyClass.AesGcm,
             hsmProvider,
             ioDispatcher,
             keyRolloverMetrics,

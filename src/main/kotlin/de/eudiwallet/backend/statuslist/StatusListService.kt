@@ -20,14 +20,9 @@ data class StatusReference(
     val uri: String,
     val index: Int,
     val expiresAt: Instant,
-    val clientInstanceId: UUID,
 )
 
 class NoSuchListException : RuntimeException("No such status list")
-
-class StatusListEntryException(
-    message: String,
-) : RuntimeException(message)
 
 @Service
 @Suppress("TooManyFunctions")
@@ -49,52 +44,9 @@ class StatusListService(
             val pool = config.pool(poolId)
             val reference = reserve(pool)
             val expiresAt = Instant.now().plus(pool.lifetime)
-            val clientInstanceId = UUID.randomUUID()
-            statusListEntryRepository.insert(
-                accountId,
-                reference.listId,
-                reference.index,
-                expiresAt,
-                clientInstanceId,
-            )
-            StatusReference(config.listUri(pool, reference.listId), reference.index, expiresAt, clientInstanceId)
+            statusListEntryRepository.insert(accountId, reference.listId, reference.index, expiresAt)
+            StatusReference(config.listUri(pool, reference.listId), reference.index, expiresAt)
         }
-
-    suspend fun reuse(
-        clientInstanceId: UUID,
-        accountId: UUID,
-        poolId: String,
-    ): StatusReference =
-        telemetryService.withSpan("StatusListService.reuse") {
-            val pool = config.pool(poolId)
-            val entry =
-                verifyStatusListEntry(
-                    statusListEntryRepository.findByAccountAndClientInstanceId(accountId, clientInstanceId),
-                    pool,
-                )
-            StatusReference(config.listUri(pool, entry.listId), entry.idx, entry.exp, clientInstanceId)
-        }
-
-    @Suppress("ThrowsCount")
-    private suspend fun verifyStatusListEntry(
-        entry: StatusListEntryEntity?,
-        pool: Pool,
-    ): StatusListEntryEntity {
-        if (entry == null) {
-            throw StatusListEntryException("Missing status list entry")
-        }
-        if (entry.exp < Instant.now()) {
-            throw StatusListEntryException("Expired status list entry")
-        }
-        val list = statusListRepository.findByIdOrNull(entry.listId)
-        if (list == null || list.pool != pool.id) {
-            throw StatusListEntryException("Wrong status list entry")
-        }
-        if (StatusListCodec.getStatus(list.data, pool.bitsPerEntry, entry.idx) == STATUS_INVALID) {
-            throw StatusListEntryException("Invalid status list entry")
-        }
-        return entry
-    }
 
     suspend fun revokeAccountEntries(accountId: UUID) =
         telemetryService.withSpan("StatusListService.revokeAccountEntries") {

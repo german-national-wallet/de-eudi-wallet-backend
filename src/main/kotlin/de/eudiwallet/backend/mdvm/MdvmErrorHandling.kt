@@ -12,31 +12,26 @@ import at.asitplus.attestation.android.PatchLevel
 import at.asitplus.attestation.android.exceptions.AttestationValueException
 import at.asitplus.attestation.android.exceptions.CertificateInvalidException
 import at.asitplus.attestation.android.exceptions.RevocationException
-import de.eudiwallet.backend.shared.challengetoken.ChallengeVerificationException
 import de.eudiwallet.backend.shared.crypto.jwkThumbprint
-import de.eudiwallet.backend.shared.hsm.HsmException
-import de.eudiwallet.backend.shared.httpsignature.SignatureVerificationException
+import de.eudiwallet.backend.shared.error.ErrorResponseCode
+import de.eudiwallet.backend.shared.error.ServiceErrorHandler
+import de.eudiwallet.backend.shared.error.TRACE_ID
 import de.eudiwallet.backend.shared.json.toJson
-import de.eudiwallet.backend.shared.jwt.JwtException
 import de.eudiwallet.backend.shared.mdvmtoken.MdvmAccountId
-import de.eudiwallet.backend.shared.messaging.MessagingUnavailableException
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.swagger.v3.oas.annotations.media.Schema
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.dao.DataAccessException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.validation.BindingResult
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
-import org.springframework.web.server.ServerWebInputException
 import java.security.PublicKey
 import java.security.cert.X509Certificate
 import java.security.interfaces.ECPublicKey
-import java.time.LocalDateTime
+import java.time.Instant
 
 abstract class MdvmException(
     explanation: String?,
@@ -384,6 +379,14 @@ class KeyAlreadyRegisteredException(
         mapOf(MDVM_ERROR_KEY to "KeyAlreadyRegisteredException") + cause.exceptionDiagnostics()
 }
 
+class AndroidLeakedKeyConflictException(
+    val serials: List<String>,
+) : RuntimeException("Android leaked keys are already stored: $serials")
+
+class AndroidLeakedKeyNotFoundException(
+    serial: String,
+) : RuntimeException("Android leaked key $serial not found")
+
 abstract class IosKeyAttestationException(
     explanation: String?,
     cause: Throwable? = null,
@@ -553,98 +556,37 @@ abstract class IosKeyAttestationException(
 @ControllerAdvice(basePackages = ["de.eudiwallet.backend.mdvm"])
 @ConditionalOnProperty(prefix = "mdvm", name = ["enabled"], havingValue = "true")
 class MdvmErrorHandler(
-    private val telemetryService: TelemetryService,
-) {
+    telemetryService: TelemetryService,
+) : ServiceErrorHandler<MdvmErrorResponseCode, MdvmErrorResponse>(
+        telemetryService,
+        MdvmErrorResponseCode.entries,
+        MdvmErrorResponse.serializer(),
+    ) {
     private val log = KotlinLogging.logger {}
 
-    @ExceptionHandler(
-        MdvmException::class,
-    )
-    fun handleMdvmFailure(e: MdvmException): ResponseEntity<MdvmErrorResponse> {
+    @ExceptionHandler(MdvmException::class)
+    fun handleMdvmFailure(e: MdvmException): ResponseEntity<String> {
         log.warn(e) {}
-        return createErrorResponseEntity(e.internalErrorCode.responseCode, e)
+        return errorResponse(e.internalErrorCode.responseCode, e)
     }
 
-    @ExceptionHandler(
-        SignatureVerificationException::class,
-    )
-    fun handleSignatureVerificationException(e: SignatureVerificationException): ResponseEntity<MdvmErrorResponse> {
+    @ExceptionHandler(AndroidLeakedKeyConflictException::class)
+    fun handleAndroidRevokedKeyConflict(e: AndroidLeakedKeyConflictException): ResponseEntity<String> {
         log.warn(e) {}
-        return createErrorResponseEntity(MdvmErrorResponseCode.SIGNATURE_VERIFICATION_FAILURE, e)
+        return errorResponse(MdvmErrorResponseCode.LEAKED_KEY_CONFLICT, e)
     }
 
-    @ExceptionHandler(ChallengeVerificationException::class)
-    fun handleChallengeVerification(e: ChallengeVerificationException): ResponseEntity<MdvmErrorResponse> {
-        val errorCode =
-            if (e.cause is JwtException.Expired) {
-                MdvmErrorResponseCode.CHALLENGE_EXPIRED
-            } else {
-                MdvmErrorResponseCode.CHALLENGE_VERIFICATION_FAILURE
-            }
+    @ExceptionHandler(AndroidLeakedKeyNotFoundException::class)
+    fun handleAndroidRevokedKeyNotFound(e: AndroidLeakedKeyNotFoundException): ResponseEntity<String> {
         log.warn(e) {}
-        return createErrorResponseEntity(errorCode, e)
+        return errorResponse(MdvmErrorResponseCode.LEAKED_KEY_NOT_FOUND, e)
     }
 
-    @ExceptionHandler(
-        IllegalArgumentException::class,
-        ServerWebInputException::class,
-    )
-    fun handleBadRequest(e: Exception): ResponseEntity<MdvmErrorResponse> {
-        val description =
-            (e as? BindingResult)
-                ?.fieldErrors
-                ?.filterNot { it.isBindingFailure }
-                ?.mapNotNull { it.defaultMessage }
-                ?.takeIf { it.isNotEmpty() }
-                ?.joinToString("; ")
-                ?: MdvmErrorResponseCode.BAD_REQUEST.description
-        return createErrorResponseEntity(MdvmErrorResponseCode.BAD_REQUEST, e, description)
-    }
-
-    @ExceptionHandler(
-        DataAccessException::class,
-    )
-    fun handleDataAccessException(e: DataAccessException): ResponseEntity<MdvmErrorResponse> {
-        log.error(e) {}
-        return createErrorResponseEntity(MdvmErrorResponseCode.DB_UNAVAILABLE, e)
-    }
-
-    @ExceptionHandler(MessagingUnavailableException::class)
-    fun handleMessagingUnavailable(e: MessagingUnavailableException): ResponseEntity<MdvmErrorResponse> {
-        log.error(e) {}
-        return createErrorResponseEntity(MdvmErrorResponseCode.MESSAGING_UNAVAILABLE, e)
-    }
-
-    @ExceptionHandler(HsmException.GetSessionFailedException::class)
-    fun handleHsmSessionUnavailable(e: HsmException.GetSessionFailedException): ResponseEntity<MdvmErrorResponse> {
-        log.error(e) {}
-        return createErrorResponseEntity(MdvmErrorResponseCode.HSM_UNAVAILABLE, e)
-    }
-
-    @ExceptionHandler(
-        Exception::class,
-    )
-    fun handleInternalServerError(e: Exception): ResponseEntity<MdvmErrorResponse> {
-        log.error(e) {}
-        return createErrorResponseEntity(MdvmErrorResponseCode.INTERNAL_SERVER_ERROR, e)
-    }
-
-    private fun createErrorResponseEntity(
+    override fun errorBody(
         code: MdvmErrorResponseCode,
-        cause: Throwable? = null,
-        description: String = code.description,
-    ): ResponseEntity<MdvmErrorResponse> {
-        telemetryService.traceErrorCode(code.name)
-        telemetryService.traceException(cause)
-        return ResponseEntity(
-            MdvmErrorResponse(
-                code = code,
-                description = description,
-                traceId = telemetryService.getCurrentTraceId(),
-            ),
-            code.httpStatus,
-        )
-    }
+        description: String?,
+        traceId: String?,
+    ) = MdvmErrorResponse(code = code, description = description ?: code.description, traceId = traceId)
 }
 
 private fun Throwable?.findIosAttestationReason(): IosAttestationException.Reason? {
@@ -732,9 +674,9 @@ private fun AttestationValueException.toKeyAttestationCode() =
     }
 
 enum class MdvmErrorResponseCode(
-    val httpStatus: HttpStatus,
+    override val httpStatus: HttpStatus,
     val description: String,
-) {
+) : ErrorResponseCode {
     MALFORMED_KEY(HttpStatus.BAD_REQUEST, "Malformed attested key"),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "MdvmAccount not found"),
     ACCOUNT_REVOKED(HttpStatus.FORBIDDEN, "MdvmAccount revoked"),
@@ -752,6 +694,8 @@ enum class MdvmErrorResponseCode(
         "The device class is affected by a security vulnerability that can not be resolved by a system update",
     ),
     KEY_ALREADY_REGISTERED(HttpStatus.CONFLICT, "An account is already registered for this key"),
+    LEAKED_KEY_NOT_FOUND(HttpStatus.NOT_FOUND, "Android leaked key not found"),
+    LEAKED_KEY_CONFLICT(HttpStatus.CONFLICT, "Android leaked keys are already stored"),
     SIGNATURE_VERIFICATION_FAILURE(HttpStatus.UNAUTHORIZED, "Signature verification failed"),
     CHALLENGE_VERIFICATION_FAILURE(HttpStatus.BAD_REQUEST, "Challenge verification failed"),
     CHALLENGE_EXPIRED(HttpStatus.BAD_REQUEST, "Challenge expired"),
@@ -807,8 +751,6 @@ enum class InternalErrorCode(
     DV_VULNERABLE_DEVICE_CLASS_UNFIXABLE(MdvmErrorResponseCode.DEVICE_VULNERABLE_UNFIXABLE),
 }
 
-const val TRACE_ID = "trace_id"
-
 @Serializable
 data class MdvmErrorResponse(
     @Schema(description = "Error code indicating the type of error")
@@ -816,7 +758,7 @@ data class MdvmErrorResponse(
     @Schema(description = "Human-readable error description")
     val description: String? = null,
     @Schema(description = "Timestamp of the error occurrence", format = "date-time")
-    val timestamp: String = LocalDateTime.now().toString(),
+    val timestamp: String = Instant.now().toString(),
     @SerialName(TRACE_ID)
     @Schema(description = "Trace ID for correlating logs and debugging")
     val traceId: String? = null,

@@ -73,6 +73,7 @@ class PoolProperties(
     val tslAuthKeyPrefix: String,
     val tslRootCertPath: Resource,
     val reservationSize: Int,
+    val tokenExpireAfter: Duration,
 ) {
     fun resolve(id: String): Pool =
         Pool(
@@ -85,8 +86,11 @@ class PoolProperties(
             tslAuthKeyPrefix = tslAuthKeyPrefix,
             tslRootCertPath = tslRootCertPath,
             reservationSize = reservationSize,
+            tokenExpireAfter = tokenExpireAfter,
         )
 }
+
+private val MAX_CLOCK_SKEW = Duration.ofSeconds(2)
 
 data class Pool(
     val id: String,
@@ -98,8 +102,9 @@ data class Pool(
     val tslAuthKeyPrefix: String,
     val tslRootCertPath: Resource,
     val reservationSize: Int,
+    val tokenExpireAfter: Duration,
 ) {
-    val tslRootCert: X509Certificate by lazy { readX509Cert(tslRootCertPath).apply { checkValidity() } }
+    val tslRootCert: X509Certificate = readX509Cert(tslRootCertPath).apply { checkValidity() }
 
     fun validate() {
         require(entriesPerList >= MIN_SIZE) {
@@ -112,7 +117,10 @@ data class Pool(
             "pool '$id': entriesPerList*bitsPerEntry must be a whole number of bytes"
         }
         require(!ttl.isZero && !ttl.isNegative) { "pool '$id': ttl must be positive" }
-        require(lifetime >= ttl.multipliedBy(2)) { "pool '$id': lifetime must be at least 2*ttl" }
+        require(tokenExpireAfter.dividedBy(2) >= ttl.plus(MAX_CLOCK_SKEW)) {
+            "pool '$id': token expiration must be bigger than 2*ttl"
+        }
+        require(lifetime >= tokenExpireAfter) { "pool '$id': lifetime should exceed token expiration" }
         require(reservationSize in 1..entriesPerList) { "pool '$id': reservationSize must be in 1..entriesPerList" }
     }
 

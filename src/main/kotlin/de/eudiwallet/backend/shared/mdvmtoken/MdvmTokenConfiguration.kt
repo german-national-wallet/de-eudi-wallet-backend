@@ -10,7 +10,5 @@ class MdvmTokenConfiguration(
     val issuer: String = "mdvm",
     val mdvmRootCertPath: Resource,
 ) {
-    val mdvmRootCert: X509Certificate by lazy {
-        readX509Cert(mdvmRootCertPath).apply { checkValidity() }
-    }
+    val mdvmRootCert: X509Certificate = readX509Cert(mdvmRootCertPath).apply { checkValidity() }
 }

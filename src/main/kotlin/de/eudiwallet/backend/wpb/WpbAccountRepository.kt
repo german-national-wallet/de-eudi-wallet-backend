@@ -13,7 +13,6 @@ private const val ID_COLUMN = "id"
 private const val WPB_ACCOUNT_ID_COLUMN = "wpb_account_id"
 private const val WI_MDVM_AUTH_PUBK_DER_COLUMN = "wi_mdvm_auth_pubk_der"
 private const val WPB_WI_REVOCATION_CODE_HASH_COLUMN = "wpb_wi_revocation_hash"
-private const val WI_HANDLE_COLUMN = "wi_handle"
 private const val REVOKED_AT_COLUMN = "revoked_at"
 private const val MDVM_WI_ID_COLUMN = "mdvm_wi_id"
 
@@ -27,12 +26,10 @@ class WpbAccountEntity(
     val wiMdvmAuthPubkDer: ByteArray,
     @Column(WPB_WI_REVOCATION_CODE_HASH_COLUMN)
     val wpbWiRevocationCodeHash: ByteArray?,
-    @Column(WI_HANDLE_COLUMN)
-    val wiHandle: String? = null,
     @Column(REVOKED_AT_COLUMN)
     val revokedAt: Instant? = null,
     @Column(MDVM_WI_ID_COLUMN)
-    val mdvmWiId: UUID? = null,
+    val mdvmWiId: UUID,
 )
 
 @Repository
@@ -55,11 +52,11 @@ interface WpbAccountRepository : CoroutineCrudRepository<WpbAccountEntity, UUID>
     @Query(
         """
         UPDATE $WPB_ACCOUNT_TABLE SET $REVOKED_AT_COLUMN = now()
-        WHERE $WI_HANDLE_COLUMN = :wiHandle AND $REVOKED_AT_COLUMN IS NULL
+        WHERE $MDVM_WI_ID_COLUMN = :mdvmWiId AND $REVOKED_AT_COLUMN IS NULL
         RETURNING $WPB_ACCOUNT_ID_COLUMN
         """,
     )
-    suspend fun revokeByWiHandleReturningId(wiHandle: String): UUID?
+    suspend fun revokeByMdvmWiIdReturningId(mdvmWiId: UUID): UUID?
 
-    suspend fun existsByWiHandleAndRevokedAtIsNotNull(wiHandle: String): Boolean
+    suspend fun existsByMdvmWiIdAndRevokedAtIsNotNull(mdvmWiId: UUID): Boolean
 }

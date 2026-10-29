@@ -13,7 +13,7 @@ spring:
       test: softhsm,dev-pki
       local-dev: softhsm,dev-pki
       ci-test: softhsm,dev-pki
-      build-docs: softhsm
+      build-docs: softhsm,dev-pki
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -73,7 +73,7 @@ server:
 deployment:
   environment:
 
-api-contract-version: 15.3.0
+api-contract-version: 16.2.0
 
 info:
   application:
@@ -143,10 +143,6 @@ otel:
     attributes:
       service:
         version: ${info.application.version}
-  instrumentation:
-    logback-appender:
-      experimental:
-        capture-logger-context-attributes: true
   java:
     disabled:
       resource:

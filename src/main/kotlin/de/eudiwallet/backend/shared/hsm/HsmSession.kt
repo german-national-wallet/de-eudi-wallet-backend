@@ -11,7 +11,6 @@ import de.eudiwallet.backend.shared.hsm.pkcs11.Pkcs11Exception
 import de.eudiwallet.backend.shared.hsm.pkcs11.Template
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import io.github.oshai.kotlinlogging.KotlinLogging
-import org.bouncycastle.crypto.ec.CustomNamedCurves
 import java.security.interfaces.ECPublicKey
 import java.time.Instant
 import java.time.ZoneId
@@ -37,6 +36,8 @@ const val AES_TAG_BITS = 128L
 const val AES_TAG_BYTES = AES_TAG_BITS.toInt() / 8
 
 const val IV_BYTES = 16
+
+private val SCAN_ATTRIBUTES = longArrayOf(Ck.CKA_ID, Ck.CKA_LABEL, Ck.CKA_START_DATE, Ck.CKA_END_DATE)
 
 internal const val HSM_KEY_ID_ATTR = "hsm.key_id"
 internal const val HSM_KEY_LABEL_ATTR = "hsm.key_label"
@@ -102,7 +103,7 @@ class HsmSession internal constructor(
 
     @Suppress("TooGenericExceptionCaught")
     fun createWrappedKeyPair(masterKeyId: HsmKeyId): WrappedKeyPair {
-        val masterKey = getKey(masterKeyId, HsmKeyClass.Aes)
+        val masterKey = getKey(masterKeyId, HsmKeyClass.AesKeyWrap)
         val keyPair = createKey()
         try {
             val publicKey =
@@ -122,7 +123,7 @@ class HsmSession internal constructor(
         masterKeyId: HsmKeyId,
         sha256Digest: ByteArray,
     ): EcdsaSignature {
-        val masterKey = getKey(masterKeyId, HsmKeyClass.Aes)
+        val masterKey = getKey(masterKeyId, HsmKeyClass.AesKeyWrap)
         val privateKey = unwrapWithMasterKey(wrappedPrivateKey, masterKey)
         try {
             return signDigest(privateKey, sha256Digest)
@@ -144,7 +145,7 @@ class HsmSession internal constructor(
                     Attr(Ck.CKA_CLASS, Ck.CKO_PUBLIC_KEY),
                     Attr(Ck.CKA_KEY_TYPE, Ck.CKK_EC),
                     Attr(Ck.CKA_VERIFY, true),
-                    Attr(Ck.CKA_EC_PARAMS, CustomNamedCurves.getOID(HSM_EC_CURVE).encoded),
+                    Attr(Ck.CKA_EC_PARAMS, HSM_EC_CURVE_OID_DER),
                 )
             val privateKeyTemplate =
                 listOf(
@@ -380,11 +381,27 @@ class HsmSession internal constructor(
                 throw HsmException.KeyLookupFailure(keyPrefix, ex)
             }
         val validityDay = validityDate.atZone(ZoneId.systemDefault()).toLocalDate()
+        val types = SCAN_ATTRIBUTES + HsmKeyClass.PROFILE_ATTRIBUTES + keyClass.strengthAttribute
         return handles
-            .map { readAttributes(it, keyPrefix, Ck.CKA_ID, Ck.CKA_LABEL, Ck.CKA_START_DATE, Ck.CKA_END_DATE) }
+            .map { readAttributes(it, keyPrefix, *types) }
             .filter { it.string(Ck.CKA_LABEL).orEmpty().startsWith(keyPrefix) }
-            .mapNotNull { HsmKey.from(it) }
-            .filter { !it.endDate.isBefore(validityDay) }
+            .mapNotNull { attributes -> HsmKey.from(attributes)?.let { it to attributes } }
+            .filter { (key, _) -> !key.endDate.isBefore(validityDay) }
+            .filter { (key, attributes) -> meetsProfile(key, attributes, keyClass) }
+            .map { (key, _) -> key }
+    }
+
+    private fun meetsProfile(
+        key: HsmKey,
+        attributes: AttributeValues,
+        keyClass: HsmKeyClass<*>,
+    ): Boolean {
+        val name = "${keyClass::class.simpleName} key ${key.label} (${key.keyId.value})"
+        val warnings = keyClass.warnings(attributes)
+        if (warnings.isNotEmpty()) log.warn { "$name: ${warnings.joinToString()}" }
+        val violations = keyClass.violations(attributes)
+        if (violations.isNotEmpty()) log.error { "$name rejected: ${violations.joinToString()}" }
+        return violations.isEmpty()
     }
 
     private fun readAttributes(

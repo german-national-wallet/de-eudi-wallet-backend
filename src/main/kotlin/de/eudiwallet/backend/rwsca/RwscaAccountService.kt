@@ -38,14 +38,11 @@ class RwscaAccountService(
         mdvmWiId: MdvmAccountId,
     ): RwscaAccount.WithoutPin =
         telemetryService.withSpan("RwscaService.createAccount") {
-            val canonicalPubk = wiMdvmAuthPubk.toCanonicalP256()
-            val wiHandle = canonicalPubk.jwkThumbprint().toString()
             val savedEntity =
                 try {
                     repository.create(
                         rwscaAccountId = UUID.randomUUID(),
-                        wiMdvmAuthPubkDer = canonicalPubk.encoded,
-                        wiHandle = wiHandle,
+                        wiMdvmAuthPubkDer = wiMdvmAuthPubk.toCanonicalP256().encoded,
                         mdvmWiId = mdvmWiId.id,
                     )
                 } catch (ex: DuplicateKeyException) {
@@ -198,16 +195,16 @@ class RwscaAccountService(
         repository.deleteByRwscaAccountId(id.id)
     }
 
-    suspend fun revokeByWiHandle(wiHandle: String): WalletInstanceRevocationOutcome =
-        telemetryService.withSpan("RwscaService.revokeByWiHandle") {
+    suspend fun revokeByMdvmWiId(mdvmWiId: MdvmAccountId): WalletInstanceRevocationOutcome =
+        telemetryService.withSpan("RwscaService.revokeByMdvmWiId") {
             when {
-                repository.revokeByWiHandle(wiHandle) > 0 -> WalletInstanceRevocationOutcome.APPLIED
+                repository.revokeByMdvmWiId(mdvmWiId.id) > 0 -> WalletInstanceRevocationOutcome.APPLIED
 
-                repository.existsByWiHandleAndRevokedAtIsNotNull(
-                    wiHandle,
+                repository.existsByMdvmWiIdAndRevokedAtIsNotNull(
+                    mdvmWiId.id,
                 ) -> WalletInstanceRevocationOutcome.ALREADY_REVOKED
 
-                else -> WalletInstanceRevocationOutcome.UNKNOWN_HANDLE
+                else -> WalletInstanceRevocationOutcome.UNKNOWN_ACCOUNT
             }
         }
 }

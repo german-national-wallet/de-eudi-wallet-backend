@@ -130,7 +130,6 @@ class AsymmetricSigningLineage(
     private fun resolveCertifiedKey(key: HsmKey): CertifiedKey {
         val chain =
             s3CertChainProvider.getVerifiedChain(key.certObjectKey(slotLabel), trustAnchor)
-                .filterNot { it.encoded.contentEquals(trustAnchor.encoded) }
         val certificatesExpireAt = (chain + trustAnchor).minOf { it.notAfter.toInstant() }
         return CertifiedKey(key.keyId, chain, minOf(key.expiresAt(), certificatesExpireAt))
     }

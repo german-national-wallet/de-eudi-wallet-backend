@@ -1,5 +1,7 @@
 package de.eudiwallet.backend.shared.hsm.pkcs11
 
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -40,6 +42,13 @@ internal class AttributeValues(
     fun bytes(type: Long): ByteArray? = values[type]
 
     fun string(type: Long): String? = values[type]?.let { String(it, Charsets.UTF_8) }
+
+    fun bool(type: Long): Boolean? = values[type]?.singleOrNull()?.let { it != Ck.FALSE }
+
+    fun ulong(type: Long): Long? =
+        values[type]?.takeIf { it.size == Long.SIZE_BYTES }?.let {
+            ByteBuffer.wrap(it).order(ByteOrder.nativeOrder()).long
+        }
 
     fun date(type: Long): LocalDate? =
         values[type]?.takeIf { it.size == CK_DATE_SIZE && it.all { b -> b in DIGITS } }?.let {

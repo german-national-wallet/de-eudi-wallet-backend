@@ -29,9 +29,7 @@ class WpbConfiguration(
     val wpbWiaAuthKeyPrefix: String,
     val wpbWiaRootCertPath: Resource,
 ) {
-    val wpbWiaRootCert: X509Certificate by lazy {
-        readX509Cert(wpbWiaRootCertPath).apply { checkValidity() }
-    }
+    val wpbWiaRootCert: X509Certificate = readX509Cert(wpbWiaRootCertPath).apply { checkValidity() }
 
     @Suppress("MagicNumber")
     val wiaExpireAfter: Duration = Duration.ofMinutes(10)

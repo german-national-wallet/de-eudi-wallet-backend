@@ -1,5 +1,6 @@
 package de.eudiwallet.backend.mdvm
 
+import de.eudiwallet.backend.shared.mdvmtoken.MdvmAccountId
 import de.eudiwallet.backend.shared.messaging.MessagingMetrics
 import de.eudiwallet.backend.shared.messaging.Module
 import de.eudiwallet.backend.shared.messaging.WalletInstanceRevocationEvent
@@ -26,7 +27,7 @@ class MdvmRevocationListener(
     fun onRevocation(payload: String) {
         telemetryService.withSpanSync("MdvmRevocationListener.onRevocation") {
             val event = json.decodeFromString<WalletInstanceRevocationEvent>(payload)
-            runBlocking { mdvmAccountService.revokeByWiHandle(event.wiHandle) }
+            runBlocking { mdvmAccountService.revokeByMdvmWiId(MdvmAccountId(event.mdvmWiId)) }
                 .report(Module.MDVM, event, messagingMetrics, log)
         }
     }

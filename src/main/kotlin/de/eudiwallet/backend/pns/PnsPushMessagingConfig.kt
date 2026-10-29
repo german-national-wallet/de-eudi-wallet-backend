@@ -21,6 +21,8 @@ internal const val PUSH_NOTIFICATION_CONTAINER_FACTORY = "pushNotificationListen
 
 private const val RETRY_BACKOFF_MS = 5_000L
 
+private const val REJECTED_RETRY_ATTEMPTS = 3L
+
 private const val MAX_POLL_RECORDS = 5
 
 @Configuration
@@ -32,28 +34,37 @@ class PnsPushMessagingConfig {
     fun pushNotificationListenerContainerFactory(
         configurer: ConcurrentKafkaListenerContainerFactoryConfigurer,
         consumerFactory: ConsumerFactory<Any, Any>,
+        pnsMetrics: PnsMetrics,
     ): ConcurrentKafkaListenerContainerFactory<Any, Any> {
         val factory = ConcurrentKafkaListenerContainerFactory<Any, Any>()
         configurer.configure(factory, consumerFactory)
         factory.containerProperties.kafkaConsumerProperties
             .setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, MAX_POLL_RECORDS.toString())
-        factory.setCommonErrorHandler(pushNotificationErrorHandler())
+        factory.setCommonErrorHandler(pushNotificationErrorHandler(pnsMetrics))
         return factory
     }
 
-    private fun pushNotificationErrorHandler(): DefaultErrorHandler {
+    private fun pushNotificationErrorHandler(pnsMetrics: PnsMetrics): DefaultErrorHandler {
         val recoverer =
             ConsumerRecordRecoverer { record, ex ->
-                log.error(ex) {
-                    "Skipping poison push notification record at " +
-                        "${record.topic()}-${record.partition()}@${record.offset()} (key=${record.key()})"
+                val position = "${record.topic()}-${record.partition()}@${record.offset()} (key=${record.key()})"
+                if (ex.rootCause() is PushDeliveryRejectedException) {
+                    pnsMetrics.countPushNotification(PushMetricOutcome.RETRIES_EXHAUSTED)
+                    log.warn(ex) { "Skipping rejected push notification record at $position after its retries" }
+                } else {
+                    log.error(ex) { "Skipping poison push notification record at $position" }
                 }
             }
         val errorHandler =
             DefaultErrorHandler(recoverer, FixedBackOff(RETRY_BACKOFF_MS, FixedBackOff.UNLIMITED_ATTEMPTS))
         errorHandler.addNotRetryableExceptions(SerializationException::class.java)
+        errorHandler.setBackOffFunction { _, ex ->
+            if (ex is PushDeliveryRejectedException) FixedBackOff(RETRY_BACKOFF_MS, REJECTED_RETRY_ATTEMPTS) else null
+        }
         return errorHandler
     }
+
+    private fun Throwable.rootCause(): Throwable = generateSequence(this) { it.cause }.last()
 
     companion object {
         @Bean

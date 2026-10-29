@@ -38,7 +38,7 @@ private class HsmJweEncrypter(
         val encryptionKeyId = header.keyID ?: throw JOSEException("KeyId is not specified")
 
         return try {
-            val encryptionKey = hsm.getKey(HsmKeyId(encryptionKeyId), HsmKeyClass.Aes)
+            val encryptionKey = hsm.getKey(HsmKeyId(encryptionKeyId), HsmKeyClass.AesGcm)
             val cipherData = hsm.encrypt(encryptionKey, clearText, aad)
             JWECryptoParts(
                 header,
@@ -87,7 +87,7 @@ private class HsmJweDecrypter(
                     requireNotNull(authTag).decode(),
                     requireNotNull(iv).decode(),
                 )
-            val decryptionKey = hsm.getKey(HsmKeyId(encryptionKeyId), HsmKeyClass.Aes)
+            val decryptionKey = hsm.getKey(HsmKeyId(encryptionKeyId), HsmKeyClass.AesGcm)
             hsm.decrypt(decryptionKey, data, aad)
         } catch (ex: HsmException) {
             throw JOSEException(ex)

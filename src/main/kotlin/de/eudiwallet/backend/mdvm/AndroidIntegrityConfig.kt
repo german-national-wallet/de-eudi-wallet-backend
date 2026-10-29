@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.core.io.ClassPathResource
 import org.springframework.core.io.Resource
+import java.time.Duration
 import java.time.YearMonth
 
 @ConfigurationProperties(prefix = "android.integrity")
@@ -20,6 +21,8 @@ class AndroidIntegrityConfig(
     val patchLevelFreshness: Int,
     val minimalAppVersion: Long,
     val revocationListResource: Resource? = ClassPathResource("android/certificate-revocations.json"),
+    @Suppress("MagicNumber")
+    val leakedKeyListRefresh: Duration = Duration.ofHours(1),
     val vulnerableClassesResource: Resource? = ClassPathResource("android/vulnerable_device_classes.json"),
     val additionalTrustedRoot: Resource? = null,
 ) {

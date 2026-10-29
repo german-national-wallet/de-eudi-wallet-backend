@@ -1,2 +1,4 @@
 logging:
-  format: JSON
+  structured:
+    format:
+      console: logstash

@@ -5,10 +5,10 @@ import de.eudiwallet.backend.shared.crypto.jwkThumbprint
 import de.eudiwallet.backend.shared.crypto.toCanonicalP256
 import de.eudiwallet.backend.shared.mdvmtoken.MdvmAccountId
 import de.eudiwallet.backend.shared.messaging.Module
+import de.eudiwallet.backend.shared.messaging.RevocationReason
 import de.eudiwallet.backend.shared.messaging.WalletInstanceRevocationEvent
 import de.eudiwallet.backend.shared.messaging.WalletInstanceRevocationOutcome
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
-import de.eudiwallet.backend.statuslist.StatusListEntryException
 import de.eudiwallet.backend.statuslist.StatusListService
 import de.eudiwallet.backend.statuslist.StatusReference
 import org.springframework.dao.DuplicateKeyException
@@ -46,7 +46,6 @@ class WpbAccountService(
                             wpbAccountId = wpbAccountId,
                             wiMdvmAuthPubkDer = canonicalPubk.encoded,
                             wpbWiRevocationCodeHash = revocationCode.hash,
-                            wiHandle = canonicalPubk.jwkThumbprint().toString(),
                             mdvmWiId = mdvmWiId.id,
                         ),
                     )
@@ -65,28 +64,29 @@ class WpbAccountService(
             }
             WalletInstanceRevocationEvent(
                 eventId = UUID.randomUUID().toString(),
-                wiHandle = entity.wiMdvmAuthPubkDer.ecPublicKeyFromX509().jwkThumbprint().toString(),
+                mdvmWiId = entity.mdvmWiId,
                 occurredAt = Instant.now().toString(),
                 source = Module.WPB.name,
+                reason = RevocationReason.USER_REVOKE.name,
             )
         }
 
     @Transactional
-    suspend fun revokeByWiHandle(wiHandle: String): WalletInstanceRevocationOutcome =
-        telemetryService.withSpan("WpbAccountService.revokeByWiHandle") {
-            val revokedAccountId = repository.revokeByWiHandleReturningId(wiHandle)
+    suspend fun revokeByMdvmWiId(mdvmWiId: MdvmAccountId): WalletInstanceRevocationOutcome =
+        telemetryService.withSpan("WpbAccountService.revokeByMdvmWiId") {
+            val revokedAccountId = repository.revokeByMdvmWiIdReturningId(mdvmWiId.id)
             when {
                 revokedAccountId != null -> {
                     statusListService.revokeAccountEntries(revokedAccountId)
                     WalletInstanceRevocationOutcome.APPLIED
                 }
 
-                repository.existsByWiHandleAndRevokedAtIsNotNull(wiHandle) -> {
+                repository.existsByMdvmWiIdAndRevokedAtIsNotNull(mdvmWiId.id) -> {
                     WalletInstanceRevocationOutcome.ALREADY_REVOKED
                 }
 
                 else -> {
-                    WalletInstanceRevocationOutcome.UNKNOWN_HANDLE
+                    WalletInstanceRevocationOutcome.UNKNOWN_ACCOUNT
                 }
             }
         }
@@ -100,20 +100,10 @@ class WpbAccountService(
             WpbAccount.fromEntity(entity.verifyAuthPubKey(authPubKey).requireNotRevoked())
         }
 
-    suspend fun provisionWiaEntry(
-        account: WpbAccount,
-        clientInstanceId: UUID?,
-    ): StatusReference =
+    suspend fun provisionWiaEntry(account: WpbAccount): StatusReference =
         telemetryService.withSpan("WpbAccountService.provisionWiaEntry") {
             val accountId = account.wpbAccountId.id
-            val reference =
-                clientInstanceId?.let {
-                    try {
-                        statusListService.reuse(it, accountId, WPB_WIA_POOL)
-                    } catch (_: StatusListEntryException) {
-                        null
-                    }
-                } ?: statusListService.allocate(accountId, WPB_WIA_POOL)
+            val reference = statusListService.allocate(accountId, WPB_WIA_POOL)
             (repository.findByWpbAccountIdForShare(accountId) ?: throw AccountNotFoundException()).requireNotRevoked()
             reference
         }

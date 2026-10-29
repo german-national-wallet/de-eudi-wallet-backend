@@ -19,7 +19,7 @@ class KafkaWalletInstanceRevocationPublisher(
     override suspend fun publish(event: WalletInstanceRevocationEvent) {
         val payload = json.encodeToString(event)
         try {
-            kafkaTemplate.send(topic, event.wiHandle, payload).await()
+            kafkaTemplate.send(topic, event.mdvmWiId.toString(), payload).await()
         } catch (ex: SpringKafkaException) {
             throw MessagingUnavailableException(ex)
         } catch (ex: ClientKafkaException) {

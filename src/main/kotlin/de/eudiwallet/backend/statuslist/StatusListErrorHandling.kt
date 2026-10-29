@@ -1,5 +1,8 @@
 package de.eudiwallet.backend.statuslist
 
+import de.eudiwallet.backend.shared.error.ErrorResponseCode
+import de.eudiwallet.backend.shared.error.TRACE_ID
+import de.eudiwallet.backend.shared.error.errorResponseEntity
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.swagger.v3.oas.annotations.media.Schema
@@ -8,7 +11,6 @@ import kotlinx.serialization.Serializable
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.dao.DataAccessResourceFailureException
 import org.springframework.http.HttpStatus
-import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -48,32 +50,20 @@ class StatusListErrorHandler(
     private fun createErrorResponseEntity(
         code: StatusListErrorResponseCode,
         cause: Throwable,
-    ): ResponseEntity<StatusListErrorResponse> {
-        telemetryService.traceErrorCode(code.name)
-        telemetryService.traceException(cause)
-        return ResponseEntity
-            .status(code.httpStatus)
-            .contentType(MediaType.APPLICATION_JSON)
-            .body(
-                StatusListErrorResponse(
-                    code = code,
-                    traceId = telemetryService.getCurrentTraceId(),
-                ),
-            )
+    ) = telemetryService.errorResponseEntity(code, cause) { traceId ->
+        StatusListErrorResponse(code = code, traceId = traceId)
     }
 }
 
 enum class StatusListErrorResponseCode(
-    val httpStatus: HttpStatus,
-) {
+    override val httpStatus: HttpStatus,
+) : ErrorResponseCode {
     NO_SUCH_LIST(HttpStatus.NOT_FOUND),
     MALFORMED_ACCEPT_HEADER(HttpStatus.BAD_REQUEST),
     NOT_ACCEPTABLE(HttpStatus.NOT_ACCEPTABLE),
     DB_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR),
 }
-
-const val TRACE_ID = "trace_id"
 
 @Serializable
 data class StatusListErrorResponse(

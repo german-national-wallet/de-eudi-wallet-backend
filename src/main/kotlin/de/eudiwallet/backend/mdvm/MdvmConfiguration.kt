@@ -23,13 +23,11 @@ class MdvmConfiguration(
     val issuer: String,
     val mdvmAuthPrvkPrefix: String,
     val mdvmRootCertPath: Resource,
-    val tokenExpireAfter: Duration = Duration.ofDays(1),
+    val tokenExpireAfter: Duration = Duration.ofHours(1),
     val saveAnalytics: Boolean = false,
     val traceDebugInfo: Boolean = false,
 ) {
-    val mdvmRootCert: X509Certificate by lazy {
-        readX509Cert(mdvmRootCertPath).apply { checkValidity() }
-    }
+    val mdvmRootCert: X509Certificate = readX509Cert(mdvmRootCertPath).apply { checkValidity() }
 }
 
 @Configuration

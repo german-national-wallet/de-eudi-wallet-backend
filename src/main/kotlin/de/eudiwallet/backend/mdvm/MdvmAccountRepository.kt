@@ -23,13 +23,11 @@ private const val DEVICE_CLASS_COLUMN = "device_class"
 private const val ANDROID_ATTESTATION_DETAILS_COLUMN = "android_attestation_details"
 private const val IOS_DEVICECHECK_ATTESTATION_COLUMN = "ios_devicecheck_attestation"
 private const val IOS_DEVICECHECK_ASSERTION_COLUMN = "ios_devicecheck_assertion"
-private const val WI_HANDLE_COLUMN = "wi_handle"
 private const val REVOKED_AT_COLUMN = "revoked_at"
 private const val UPDATED_AT_COLUMN = "updated_at"
 private const val VERSION_COLUMN = "version"
 
 private const val MDVM_ACCOUNT_ID_PARAM = "mdvm_account_id"
-private const val WI_HANDLE_PARAM = "wi_handle"
 private const val DEVICE_CLASS_PARAM = "device_class"
 private const val ANDROID_ATTESTATION_DETAILS_PARAM = "android_attestation_details"
 private const val IOS_DEVICECHECK_ASSERTION_PARAM = "ios_devicecheck_assertion"
@@ -61,8 +59,6 @@ data class MdvmAccountEntity(
     val iosDeviceAttestation: Json? = null,
     @Column(IOS_DEVICECHECK_ASSERTION_COLUMN)
     val iosDeviceAssertion: Json? = null,
-    @Column(WI_HANDLE_COLUMN)
-    val wiHandle: String? = null,
     @Column(REVOKED_AT_COLUMN)
     val revokedAt: Instant? = null,
     @Version
@@ -99,28 +95,18 @@ interface MdvmAccountRepository : CoroutineCrudRepository<MdvmAccountEntity, UUI
 
     fun findAllByRevokedAtIsNull(): Flow<MdvmAccountEntity>
 
+    @Modifying
     @Query(
         """
         UPDATE $DEVICE_ACCOUNT_TABLE
         SET $REVOKED_AT_COLUMN = now(),
             $VERSION_COLUMN = $VERSION_COLUMN + 1
-        WHERE $WI_HANDLE_COLUMN = :$WI_HANDLE_PARAM AND $REVOKED_AT_COLUMN IS NULL
-        RETURNING $MDVM_WI_ID_COLUMN
+        WHERE $MDVM_WI_ID_COLUMN = :$MDVM_ACCOUNT_ID_PARAM AND $REVOKED_AT_COLUMN IS NULL
     """,
     )
-    suspend fun revokeByWiHandleReturningId(
-        @Param(WI_HANDLE_PARAM) wiHandle: String,
-    ): UUID?
-
-    @Query(
-        """
-        SELECT $MDVM_WI_ID_COLUMN FROM $DEVICE_ACCOUNT_TABLE
-        WHERE $WI_HANDLE_COLUMN = :$WI_HANDLE_PARAM AND $REVOKED_AT_COLUMN IS NOT NULL
-        """,
-    )
-    suspend fun findRevokedMdvmWiIdByWiHandle(
-        @Param(WI_HANDLE_PARAM) wiHandle: String,
-    ): UUID?
+    suspend fun revokeByMdvmWiId(
+        @Param(MDVM_ACCOUNT_ID_PARAM) mdvmWiId: UUID,
+    ): Long
 
     @Modifying
     @Query(

@@ -70,7 +70,6 @@ dependencies {
 
     implementation(libs.springdoc.openapi.starter.webflux.ui)
 
-    implementation(libs.logstash.logback.encoder)
     implementation(libs.opentelemetry.spring.boot.starter)
     implementation(libs.opentelemetry.extension.kotlin)
     implementation(libs.opentelemetry.samplers)
@@ -82,6 +81,7 @@ dependencies {
     implementation(libs.vdurmont.semver4j)
 
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.opentelemetry.sdk.testing)
     testImplementation(libs.spring.boot.starter.webflux.test)
     testImplementation(libs.spring.boot.data.r2dbc.test)
     testImplementation(libs.kotlin.test.junit5)
@@ -231,6 +231,7 @@ openApi {
     val customPort = ServerSocket(0).use { it.localPort }
 
     customBootRun.args = listOf("--spring.profiles.include=build-docs", "--server.port=$customPort")
+    customBootRun.workingDir = layout.projectDirectory
     groupedApiMappings =
         mutableMapOf(
             "http://localhost:$customPort/v3/api-docs" to "all-api.json",

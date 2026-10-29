@@ -10,6 +10,8 @@ enum class PushMetricOutcome {
     DELIVERED,
     TERMINAL,
     TRANSIENT,
+    REJECTED,
+    RETRIES_EXHAUSTED,
     NO_REGISTRATION,
 }
 

@@ -1,5 +1,6 @@
 package de.eudiwallet.backend.rwsca
 
+import de.eudiwallet.backend.shared.mdvmtoken.MdvmAccountId
 import de.eudiwallet.backend.shared.messaging.MessagingMetrics
 import de.eudiwallet.backend.shared.messaging.Module
 import de.eudiwallet.backend.shared.messaging.WalletInstanceRevocationEvent
@@ -26,7 +27,7 @@ class RwscaRevocationListener(
     fun onRevocation(payload: String) {
         telemetryService.withSpanSync("RwscaRevocationListener.onRevocation") {
             val event = json.decodeFromString<WalletInstanceRevocationEvent>(payload)
-            runBlocking { rwscaAccountService.revokeByWiHandle(event.wiHandle) }
+            runBlocking { rwscaAccountService.revokeByMdvmWiId(MdvmAccountId(event.mdvmWiId)) }
                 .report(Module.RWSCA, event, messagingMetrics, log)
         }
     }

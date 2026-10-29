@@ -20,6 +20,7 @@ statuslist:
       reservation-size: 64
       issuer: ${wpb.issuer}
       ttl: PT1H
-      lifetime: P60D
+      lifetime: P61D
       tsl-auth-key-prefix: ${hsm.key-prefix}-tsl_wia_auth
       tsl-root-cert-path: ${pki.nw-root-cert-path}
+      token-expire-after: P1D

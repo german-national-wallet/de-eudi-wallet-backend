@@ -5,6 +5,8 @@ import de.eudiwallet.backend.shared.mdvmtoken.MdvmToken
 
 internal const val EXAMPLE_INSTANT = "2025-01-24T10:00:00Z"
 
+internal const val EXAMPLE_SERIAL = "64deaa4d53885472afac267bdbd4a472"
+
 internal const val MDVM_AUTH_CHALLENGE_EXAMPLE =
     "Header {kid, typ: ${ChallengeTokenBuilder.JWT_TYPE}, alg: HS256}; payload {iss, nonce: <UUID>, iat}."
 
@@ -67,6 +69,10 @@ private const val ACCOUNT_NOT_FOUND =
     """| 404 | `ACCOUNT_NOT_FOUND` | Account with provided ID not found |"""
 private const val KEY_ALREADY_REGISTERED =
     """| 409 | `KEY_ALREADY_REGISTERED` | An account already exists for this auth key |"""
+private const val LEAKED_KEY_NOT_FOUND =
+    """| 404 | `LEAKED_KEY_NOT_FOUND` | No leaked Android key with this serial |"""
+private const val LEAKED_KEY_CONFLICT =
+    """| 409 | `LEAKED_KEY_CONFLICT` | Leaked keys are already stored |"""
 private const val GENERIC_BAD_REQUEST = """| 400 | `BAD_REQUEST` | Bad request |"""
 private const val SIGNATURE_VERIFICATION_FAILURE =
     """| 401 | `SIGNATURE_VERIFICATION_FAILURE` | HTTP message signature verification failed |"""
@@ -224,6 +230,42 @@ revokes accounts which have unfixable vulnerabilities.
 |---|---|---|
 $GENERIC_BAD_REQUEST
 $MESSAGING_UNAVAILABLE
+$INTERNAL_SERVER_ERROR
+$DB_UNAVAILABLE
+"""
+
+internal const val LIST_ANDROID_LEAKED_KEYS_DOCS = """
+No signatures required. Not exposed to Wallet Instances: the gateway uses special authentication for it — an operations
+endpoint.
+
+Android attestation certificates revoked in addition to Google's official list.
+
+| HTTP Status | Error Code | Description |
+|---|---|---|
+$INTERNAL_SERVER_ERROR
+$DB_UNAVAILABLE
+"""
+
+internal const val ADD_ANDROID_LEAKED_KEYS_DOCS = """
+Add Android leaked keys.
+
+Stores all entries or none. Serials are normalized to lowercase hex without leading zeros; every serial is parsed as hex.
+
+| HTTP Status | Error Code | Description |
+|---|---|---|
+$GENERIC_BAD_REQUEST
+$LEAKED_KEY_CONFLICT
+$INTERNAL_SERVER_ERROR
+$DB_UNAVAILABLE
+"""
+
+internal const val REMOVE_ANDROID_LEAKED_KEY_DOCS = """
+Removes Android leaked key.
+
+| HTTP Status | Error Code | Description |
+|---|---|---|
+$GENERIC_BAD_REQUEST
+$LEAKED_KEY_NOT_FOUND
 $INTERNAL_SERVER_ERROR
 $DB_UNAVAILABLE
 """

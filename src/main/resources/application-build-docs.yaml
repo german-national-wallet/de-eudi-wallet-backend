@@ -13,10 +13,6 @@ spring:
   r2dbc:
     url: r2dbc:postgresql://empty
 
-pki:
-  nw-root-cert-path: file:build-docs
-  mdvm-root-cert-path: file:build-docs
-
 s3:
   endpoint: http://build-docs
   region: build-docs

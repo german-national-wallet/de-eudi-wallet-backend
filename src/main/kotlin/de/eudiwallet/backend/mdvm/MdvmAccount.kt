@@ -4,7 +4,6 @@ import at.asitplus.attestation.CanonicalIosAttestation
 import at.asitplus.attestation.android.AttestationKeyDescription
 import at.asitplus.attestation.android.AuthorizationList
 import de.eudiwallet.backend.shared.crypto.ecPublicKeyFromX509
-import de.eudiwallet.backend.shared.crypto.jwkThumbprint
 import de.eudiwallet.backend.shared.crypto.toBase64
 import de.eudiwallet.backend.shared.json.fromPostgresJson
 import de.eudiwallet.backend.shared.json.toPostgresJson
@@ -59,7 +58,6 @@ data class MdvmAccount(
             androidAttestationDetails = androidDeviceAttestation.toStorage(),
             iosDeviceAttestation = iosDeviceAttestation.toStorage(),
             iosDeviceAssertion = iosDeviceAssertion.toStorage(),
-            wiHandle = authPublicKey.jwkThumbprint().toString(),
             updatedAt = updatedAt,
         )
 
@@ -115,7 +113,7 @@ data class AndroidDeviceInfo(
 data class IosDeviceInfo(
     val model: String,
     val hardwareModel: String?,
-    val uname: String,
+    val uname: String?,
     val osVersion: String,
     val systemVersion: String,
 ) : DeviceInfo {

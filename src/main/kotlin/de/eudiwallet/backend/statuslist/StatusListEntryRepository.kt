@@ -25,16 +25,14 @@ class StatusListEntryEntity(
     val exp: Instant,
     @Column("created")
     val created: Instant,
-    @Column("client_instance_id")
-    val clientInstanceId: UUID?,
 )
 
 @Repository
 interface StatusListEntryRepository : CoroutineCrudRepository<StatusListEntryEntity, UUID> {
     @Query(
         """
-        INSERT INTO $STATUS_LIST_ENTRY_TABLE (account_id, list_id, idx, exp, client_instance_id)
-        VALUES (:accountId, :listId, :idx, :exp, :clientInstanceId)
+        INSERT INTO $STATUS_LIST_ENTRY_TABLE (account_id, list_id, idx, exp)
+        VALUES (:accountId, :listId, :idx, :exp)
         """,
     )
     suspend fun insert(
@@ -42,19 +40,7 @@ interface StatusListEntryRepository : CoroutineCrudRepository<StatusListEntryEnt
         listId: UUID,
         idx: Int,
         exp: Instant,
-        clientInstanceId: UUID,
     )
-
-    @Query(
-        """
-        SELECT * FROM $STATUS_LIST_ENTRY_TABLE
-        WHERE client_instance_id = :clientInstanceId AND account_id = :accountId
-        """,
-    )
-    suspend fun findByAccountAndClientInstanceId(
-        accountId: UUID,
-        clientInstanceId: UUID,
-    ): StatusListEntryEntity?
 
     @Query("SELECT * FROM $STATUS_LIST_ENTRY_TABLE WHERE account_id = :accountId AND exp > now() ORDER BY list_id, idx")
     fun findLiveByAccountId(accountId: UUID): Flow<StatusListEntryEntity>

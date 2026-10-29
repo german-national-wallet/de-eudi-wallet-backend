@@ -19,7 +19,7 @@ x-app-env: &app-env
   MESSAGING_KAFKA_ENABLED: "true"
   KAFKA_BOOTSTRAP_SERVERS: kafka:9092
   KAFKA_SECURITY_PROTOCOL: PLAINTEXT
-  WALLET_REVOCATION_TOPIC: wallet-instance-revocation
+  WALLET_REVOCATION_TOPIC: wallet-instance-revocation-v2
   PUSH_NOTIFICATION_TOPIC: push-notification
 
 x-app-volumes: &app-volumes
@@ -163,13 +163,12 @@ services:
       - |
         # Fail the init container on the first failed create — without set -e only the last command's status counts.
         set -e
-        # Log-compacted, no time retention: a Wallet Instance revocation is a permanent fact, and compaction makes
-        # publish-before-consume safe (events published before any consumer exists never expire).
+        # Revocations: time-retained (30 days), not compacted, as provisioned on the deployed stages.
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \
           --create --if-not-exists \
           --topic "$$WALLET_REVOCATION_TOPIC" \
           --partitions 3 --replication-factor 1 \
-          --config cleanup.policy=compact --config retention.ms=-1
+          --config cleanup.policy=delete --config retention.ms=2592000000
         # Time-retained (7 days) and not compacted: a push notification is a transient instruction to a device, and a
         # compacted forever-topic would re-push the whole history on a consumer-group reset.
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \

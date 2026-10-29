@@ -17,7 +17,6 @@ private const val WI_MDVM_AUTH_PUBK_DER_COLUMN = "wi_mdvm_auth_pubk_der"
 private const val WI_RWSCA_PIN_PUBK_DER_COLUMN = "wi_rwsca_pin_pubk_der"
 private const val RWSCA_PIN_TRY_COUNTER_COLUMN = "rwsca_pin_try_counter"
 private const val RWSCA_PIN_TRY_FAILED_AT_COLUMN = "rwsca_pin_try_failed_at"
-private const val WI_HANDLE_COLUMN = "wi_handle"
 private const val REVOKED_AT_COLUMN = "revoked_at"
 private const val MDVM_WI_ID_COLUMN = "mdvm_wi_id"
 
@@ -35,12 +34,10 @@ class RwscaAccountEntity(
     val pinTryCounter: Int?,
     @Column(RWSCA_PIN_TRY_FAILED_AT_COLUMN)
     val pinTryFailedAt: Instant?,
-    @Column(WI_HANDLE_COLUMN)
-    val wiHandle: String? = null,
     @Column(REVOKED_AT_COLUMN)
     val revokedAt: Instant? = null,
     @Column(MDVM_WI_ID_COLUMN)
-    val mdvmWiId: UUID? = null,
+    val mdvmWiId: UUID,
 )
 
 @Repository
@@ -53,15 +50,14 @@ interface RwscaAccountRepository : CoroutineCrudRepository<RwscaAccountEntity, U
 
     @Query(
         """
-            INSERT INTO $RWSCA_ACCOUNT_TABLE ($ID_COLUMN, $RWSCA_ACCOUNT_ID_COLUMN, $WI_MDVM_AUTH_PUBK_DER_COLUMN, $WI_RWSCA_PIN_PUBK_DER_COLUMN, $WI_HANDLE_COLUMN, $MDVM_WI_ID_COLUMN)
-            VALUES (:#{T(java.util.UUID).randomUUID()},:rwscaAccountId, :wiMdvmAuthPubkDer, null, :wiHandle, :mdvmWiId)
+            INSERT INTO $RWSCA_ACCOUNT_TABLE ($ID_COLUMN, $RWSCA_ACCOUNT_ID_COLUMN, $WI_MDVM_AUTH_PUBK_DER_COLUMN, $WI_RWSCA_PIN_PUBK_DER_COLUMN, $MDVM_WI_ID_COLUMN)
+            VALUES (:#{T(java.util.UUID).randomUUID()},:rwscaAccountId, :wiMdvmAuthPubkDer, null, :mdvmWiId)
             RETURNING *
         """,
     )
     suspend fun create(
         rwscaAccountId: UUID,
         wiMdvmAuthPubkDer: ByteArray,
-        wiHandle: String,
         mdvmWiId: UUID,
     ): RwscaAccountEntity
 
@@ -69,12 +65,12 @@ interface RwscaAccountRepository : CoroutineCrudRepository<RwscaAccountEntity, U
     @Query(
         """
             UPDATE $RWSCA_ACCOUNT_TABLE SET $REVOKED_AT_COLUMN = now()
-            WHERE $WI_HANDLE_COLUMN = :wiHandle AND $REVOKED_AT_COLUMN IS NULL
+            WHERE $MDVM_WI_ID_COLUMN = :mdvmWiId AND $REVOKED_AT_COLUMN IS NULL
         """,
     )
-    suspend fun revokeByWiHandle(wiHandle: String): Long
+    suspend fun revokeByMdvmWiId(mdvmWiId: UUID): Long
 
-    suspend fun existsByWiHandleAndRevokedAtIsNotNull(wiHandle: String): Boolean
+    suspend fun existsByMdvmWiIdAndRevokedAtIsNotNull(mdvmWiId: UUID): Boolean
 
     @Query(
         """

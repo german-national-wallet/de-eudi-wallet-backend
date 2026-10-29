@@ -9,6 +9,7 @@ import de.eudiwallet.backend.shared.hsm.HsmKeyId
 import de.eudiwallet.backend.shared.jwt.HsmHmacSigner
 import de.eudiwallet.backend.shared.jwt.HsmHmacVerifier
 import de.eudiwallet.backend.shared.jwt.JwtException
+import de.eudiwallet.backend.shared.jwt.validateCanonicalSignature
 import de.eudiwallet.backend.shared.jwt.validateIssueTime
 import de.eudiwallet.backend.shared.jwt.validateIssuer
 import de.eudiwallet.backend.shared.jwt.validateType
@@ -25,6 +26,10 @@ import java.util.UUID
 class ChallengeVerificationException(
     cause: Throwable,
 ) : RuntimeException("Challenge verification failed", cause)
+
+class ChallengeExpiredException(
+    cause: Throwable,
+) : RuntimeException("Challenge expired", cause)
 
 @Component
 class ChallengeTokenBuilder(
@@ -69,10 +74,13 @@ class ChallengeTokenBuilder(
         try {
             val jwt = SignedJWT.parse(jwtString)
             jwt.validateType(JWT_TYPE)
+            jwt.validateCanonicalSignature()
             jwt.validateIssuer(issuer)
             val keyId = jwt.validatedKeyId(challengeSymkLineage.current().validKeys.map { it.keyId.value })
-            jwt.validateIssueTime(config.challengeExpireAfter)
             hsmVerifier.verify(jwt, HsmKeyId(keyId))
+            jwt.validateIssueTime(config.challengeExpireAfter)
+        } catch (e: JwtException.Expired) {
+            throw ChallengeExpiredException(e)
         } catch (e: JwtException) {
             throw ChallengeVerificationException(e)
         } catch (e: ParseException) {

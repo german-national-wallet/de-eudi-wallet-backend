@@ -1,5 +1,6 @@
 package de.eudiwallet.backend.wpb
 
+import de.eudiwallet.backend.shared.mdvmtoken.MdvmAccountId
 import de.eudiwallet.backend.shared.messaging.MessagingMetrics
 import de.eudiwallet.backend.shared.messaging.Module
 import de.eudiwallet.backend.shared.messaging.WalletInstanceRevocationEvent
@@ -26,7 +27,7 @@ class WpbRevocationListener(
     fun onRevocation(payload: String) {
         telemetryService.withSpanSync("WpbRevocationListener.onRevocation") {
             val event = json.decodeFromString<WalletInstanceRevocationEvent>(payload)
-            runBlocking { wpbAccountService.revokeByWiHandle(event.wiHandle) }
+            runBlocking { wpbAccountService.revokeByMdvmWiId(MdvmAccountId(event.mdvmWiId)) }
                 .report(Module.WPB, event, messagingMetrics, log)
         }
     }

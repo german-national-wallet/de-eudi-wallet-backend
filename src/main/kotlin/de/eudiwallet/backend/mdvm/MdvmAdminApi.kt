@@ -1,8 +1,10 @@
 package de.eudiwallet.backend.mdvm
 
-import de.eudiwallet.backend.shared.crypto.jwkThumbprint
+import at.asitplus.attestation.android.AndroidRevocationList
+import com.nimbusds.jwt.SignedJWT
 import de.eudiwallet.backend.shared.messaging.MessagingUnavailableException
 import de.eudiwallet.backend.shared.messaging.Module
+import de.eudiwallet.backend.shared.messaging.RevocationReason
 import de.eudiwallet.backend.shared.messaging.WalletInstanceRevocationEvent
 import de.eudiwallet.backend.shared.messaging.WalletInstanceRevocationPublisher
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
@@ -11,15 +13,28 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.tags.Tag
+import jakarta.validation.Valid
+import jakarta.validation.constraints.Pattern
+import jakarta.validation.constraints.Size
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseBody
+import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ServerWebInputException
+import java.text.ParseException
 import java.time.Instant
 import java.util.UUID
 
@@ -34,6 +49,22 @@ const val AFFECTED_DEVICE_CLASSES_FIELD = "affected_device_classes"
 const val DEVICE_TYPE_FIELD = "device_type"
 const val VULNERABILITY_ID_FIELD = "vulnerability_id"
 const val CLASSIFICATION_FIELD = "classification"
+const val ENTRIES_FIELD = "entries"
+const val SERIAL_FIELD = "serial"
+const val STATUS_FIELD = "status"
+const val REASON_FIELD = "reason"
+const val COMMENT_FIELD = "comment"
+const val ADDED_BY_FIELD = "added_by"
+const val CREATED_AT_FIELD = "created_at"
+
+const val MAX_LEAKED_KEYS_PER_REQUEST = 100
+private const val MAX_LEAKED_KEY_COMMENT_LENGTH = 1000
+
+private const val SERIAL_PATTERN = "^[0-9a-fA-F]{1,64}$"
+private val SERIAL_REGEX = Regex(SERIAL_PATTERN)
+
+private const val BEARER_PREFIX = "Bearer "
+private const val USERNAME_CLAIM = "preferred_username"
 
 @Serializable
 data class VulnerableDeviceClassStatistic(
@@ -73,6 +104,53 @@ data class VulnerableDeviceClassRevocationResponse(
     val affectedDeviceClasses: List<VulnerableDeviceClassStatistic>,
 )
 
+@Serializable
+data class AndroidLeakedKeyAddRequest(
+    @SerialName(ENTRIES_FIELD)
+    @Schema(description = "Keys to revoke, stored all or none")
+    @field:Size(
+        min = 1,
+        max = MAX_LEAKED_KEYS_PER_REQUEST,
+        message = "$ENTRIES_FIELD must hold 1 to $MAX_LEAKED_KEYS_PER_REQUEST items",
+    )
+    @field:Valid
+    val entries: List<AndroidLeakedKeyEntry>,
+)
+
+@Serializable
+data class AndroidLeakedKeyListResponse(
+    @SerialName(ENTRIES_FIELD)
+    @Schema(description = "Leaked keys, oldest first")
+    val entries: List<AndroidLeakedKeyEntry>,
+)
+
+@Serializable
+data class AndroidLeakedKeyEntry(
+    @SerialName(SERIAL_FIELD)
+    @Schema(description = "Hexadecimal certificate serial", example = EXAMPLE_SERIAL, pattern = SERIAL_PATTERN)
+    @field:Pattern(regexp = SERIAL_PATTERN, message = "$SERIAL_FIELD must be hexadecimal, at most 64 digits")
+    val serial: String,
+    @SerialName(STATUS_FIELD)
+    @Schema(description = "Revocation status", defaultValue = "REVOKED")
+    val status: AndroidRevocationList.RevocationStatus = AndroidRevocationList.RevocationStatus.REVOKED,
+    @SerialName(REASON_FIELD)
+    @Schema(description = "Revocation reason", defaultValue = "UNSPECIFIED")
+    val reason: AndroidRevocationList.RevocationReason = AndroidRevocationList.RevocationReason.UNSPECIFIED,
+    @SerialName(COMMENT_FIELD)
+    @Schema(description = "Free text: source, ticket", maxLength = MAX_LEAKED_KEY_COMMENT_LENGTH)
+    @field:Size(
+        max = MAX_LEAKED_KEY_COMMENT_LENGTH,
+        message = "$COMMENT_FIELD must be at most $MAX_LEAKED_KEY_COMMENT_LENGTH characters",
+    )
+    val comment: String? = null,
+    @SerialName(ADDED_BY_FIELD)
+    @Schema(description = "Admin who added the key, from the gateway's ID token; ignored on input")
+    val addedBy: String? = null,
+    @SerialName(CREATED_AT_FIELD)
+    @Schema(description = "When the key was added", format = "date-time", example = EXAMPLE_INSTANT)
+    val createdAt: String? = null,
+)
+
 @RestController
 @RequestMapping("/v1/mdvm/admin")
 @Tag(name = "mdvm-admin", description = "MDVM administrative operations")
@@ -82,6 +160,7 @@ class MdvmAdminApi(
     private val mdvmAccountService: MdvmAccountService,
     private val telemetryService: TelemetryService,
     private val revocationPublisherProvider: ObjectProvider<WalletInstanceRevocationPublisher>,
+    private val androidLeakedKeyService: AndroidLeakedKeyService,
 ) {
     private val log = KotlinLogging.logger {}
 
@@ -92,25 +171,67 @@ class MdvmAdminApi(
     @PostMapping("/revokeDeviceClasses")
     @ResponseBody
     suspend fun revokeVulnerableDeviceClasses(
+        @Parameter(hidden = true) @RequestHeader(HttpHeaders.AUTHORIZATION) authorization: String,
         @Parameter(description = "True (default) - only report; false - revoke")
         @RequestParam(DRY_RUN_PARAM, defaultValue = "true") dryRun: Boolean,
     ): VulnerableDeviceClassRevocationResponse =
         telemetryService.withSpan("MdvmAdminApi.revokeVulnerableDeviceClasses") {
+            val revokedBy = authorization.adminUsername()
             val publisher =
                 if (dryRun) {
                     null
                 } else {
                     revocationPublisherProvider.getIfAvailable() ?: throw MessagingUnavailableException()
                 }
+            if (!dryRun) log.info { "Device class revocation run started by $revokedBy" }
 
             val statistics = Statistics()
-            mdvmAccountService.findNonRevokedAccounts().collect { account ->
-                val outcome = scanDeviceClass(account)
-                val published = outcome.needRevocation() && publisher != null && publishRevocation(publisher, account)
+            mdvmAccountService.findNonRevokedAccounts().collect { decoded ->
+                val outcome = decoded.fold(::scanDeviceClass) { DeviceClassScanOutcome.Skipped }
+                val published =
+                    outcome.needRevocation() && publisher != null && publishRevocation(publisher, decoded.getOrThrow())
                 statistics.add(outcome, published)
             }
-            statistics.toResponse()
+            statistics.toResponse().also {
+                if (!dryRun) log.info { "${it.revocationsPublished} device class revocations published by $revokedBy" }
+            }
         }
+
+    @Operation(summary = "List leaked Android keys", description = LIST_ANDROID_LEAKED_KEYS_DOCS)
+    @GetMapping("/androidLeakedKeys")
+    @ResponseBody
+    suspend fun listAndroidLeakedKeys(): AndroidLeakedKeyListResponse =
+        telemetryService.withSpan("MdvmAdminApi.listAndroidLeakedKeys") {
+            AndroidLeakedKeyListResponse(androidLeakedKeyService.findAll().map { it.toResponse() })
+        }
+
+    @Operation(summary = "Add leaked Android keys", description = ADD_ANDROID_LEAKED_KEYS_DOCS)
+    @PostMapping("/androidLeakedKeys")
+    @ResponseStatus(HttpStatus.CREATED)
+    @ResponseBody
+    suspend fun addAndroidLeakedKeys(
+        @Parameter(hidden = true) @RequestHeader(HttpHeaders.AUTHORIZATION) authorization: String,
+        @Valid @RequestBody request: AndroidLeakedKeyAddRequest,
+    ): AndroidLeakedKeyListResponse =
+        telemetryService.withSpan("MdvmAdminApi.addAndroidLeakedKeys") {
+            val addedBy = authorization.adminUsername()
+            val keys = request.entries.map { AndroidLeakedKey(it.serial, it.status, it.reason, it.comment, addedBy) }
+            AndroidLeakedKeyListResponse(androidLeakedKeyService.add(keys).map { it.toResponse() })
+        }
+
+    @Operation(summary = "Remove a leaked Android key", description = REMOVE_ANDROID_LEAKED_KEY_DOCS)
+    @DeleteMapping("/androidLeakedKeys/{$SERIAL_FIELD}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    suspend fun removeAndroidLeakedKey(
+        @Parameter(hidden = true) @RequestHeader(HttpHeaders.AUTHORIZATION) authorization: String,
+        @Parameter(description = "Hexadecimal certificate serial, normalized before lookup", example = EXAMPLE_SERIAL)
+        @PathVariable(SERIAL_FIELD) serial: String,
+    ) = telemetryService.withSpan("MdvmAdminApi.removeAndroidLeakedKey") {
+        val removedBy = authorization.adminUsername()
+        if (!SERIAL_REGEX.matches(serial)) throw ServerWebInputException("$SERIAL_FIELD must be hexadecimal")
+        androidLeakedKeyService.remove(serial)
+        log.info { "Leaked Android key ${serial.normalizeSerial()} removed by $removedBy" }
+    }
 
     private fun scanDeviceClass(account: MdvmAccount): DeviceClassScanOutcome =
         try {
@@ -220,10 +341,36 @@ private class Statistics {
         affectedAccounts.filterKeys { it.classification == classification }.values.sum()
 }
 
+private fun String.adminUsername(): String {
+    val username =
+        try {
+            SignedJWT.parse(removePrefix(BEARER_PREFIX)).jwtClaimsSet.getStringClaim(USERNAME_CLAIM)
+        } catch (ex: ParseException) {
+            throw ServerWebInputException("${HttpHeaders.AUTHORIZATION} must carry an ID token", null, ex)
+        }
+    if (username.isNullOrBlank()) {
+        throw ServerWebInputException("${HttpHeaders.AUTHORIZATION} ID token lacks $USERNAME_CLAIM")
+    }
+    return username
+}
+
+private fun AndroidLeakedKey.toResponse() =
+    AndroidLeakedKeyEntry(
+        serial,
+        status,
+        reason,
+        comment,
+        addedBy,
+        checkNotNull(createdAt) {
+            "Unsaved key $serial"
+        }.toString(),
+    )
+
 private fun MdvmAccount.toRevocationEvent() =
     WalletInstanceRevocationEvent(
         eventId = UUID.randomUUID().toString(),
-        wiHandle = authPublicKey.jwkThumbprint().toString(),
+        mdvmWiId = mdvmAccountId.id,
         occurredAt = Instant.now().toString(),
         source = Module.MDVM.name,
+        reason = RevocationReason.MDVM_REVOKE.name,
     )

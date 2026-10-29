@@ -16,14 +16,11 @@ This repository is one-way, read-only and flows out of an internal repository.
 
 ## Build and run
 
-Prerequisites: a JDK 25, Docker with the compose plugin, `openssl`.
+Prerequisites: a JDK 25, Docker with the compose plugin, SoftHSM and Python 3.12+.
 
-1. **Generate the local key material.** The SoftHSM key fixtures and the dev PKI (signing keys, roots, chains) are
-   not published; the compose stack builds the keys into its images and mounts the roots and chains (see
-   [`softhsm/README.md`](softhsm/README.md)).
-   ```bash
-   ./softhsm/gen-keys.sh
-   ```
+1. **Generate the local key material.** The SoftHSM token store and the dev PKI (roots, chains) are not published;
+   generate them as [`softhsm/README.md`](softhsm/README.md) describes. The compose stack builds the token store into
+   its images and mounts the roots and chains.
 2. **Build the jars.**
    ```bash
    ./gradlew bootJar bootJarMdvm bootJarRwsca bootJarWpb bootJarPns

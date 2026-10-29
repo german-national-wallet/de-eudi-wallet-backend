@@ -5,6 +5,7 @@ package de.eudiwallet.backend.shared.jwt
 import com.nimbusds.jose.JOSEException
 import com.nimbusds.jose.JWSAlgorithm
 import com.nimbusds.jose.crypto.ECDSAVerifier
+import com.nimbusds.jose.util.Base64URL
 import com.nimbusds.jwt.EncryptedJWT
 import com.nimbusds.jwt.JWTClaimNames.EXPIRATION_TIME
 import com.nimbusds.jwt.JWTClaimNames.ISSUED_AT
@@ -38,6 +39,12 @@ fun SignedJWT.validatedKeyId(allowedKeyIds: List<String>): String = header.keyID
 fun SignedJWT.validateIssuer(expectedIssuer: String) {
     if (jwtClaimsSet.issuer != expectedIssuer) {
         throw JwtException.IssuerMismatch(jwtType)
+    }
+}
+
+fun SignedJWT.validateCanonicalSignature() {
+    if (Base64URL.encode(signature.decode()).toString() != signature.toString()) {
+        throw JwtException.NonCanonicalSignature(jwtType)
     }
 }
 
@@ -190,6 +197,10 @@ sealed class JwtException(
     class SignatureFailure(
         type: String,
     ) : JwtException(type, "signature validation failed")
+
+    class NonCanonicalSignature(
+        type: String,
+    ) : JwtException(type, "signature is not canonical base64url")
 
     class CertificateFailure(
         type: String,

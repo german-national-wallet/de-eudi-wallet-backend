@@ -13,6 +13,10 @@ import java.security.cert.X509Certificate
 
 private val log = KotlinLogging.logger {}
 
+private const val DIGITAL_SIGNATURE_INDEX = 0
+
+private const val NOT_A_CA = -1
+
 class S3CertChainException(
     message: String,
     cause: Throwable? = null,
@@ -33,8 +37,10 @@ class S3CertChainProvider(
     ): List<X509Certificate> {
         val pemBytes = fetch(objectKey)
         val chain = parseChain(objectKey, pemBytes)
-        validateToAnchor(objectKey, chain, trustAnchor)
-        return chain
+        val path = chain.takeWhile { !it.encoded.contentEquals(trustAnchor.encoded) }
+        validateToAnchor(objectKey, path, trustAnchor)
+        validateLeafCertificate(objectKey, path)
+        return path
     }
 
     private fun fetch(objectKey: String): ByteArray =
@@ -65,12 +71,11 @@ class S3CertChainProvider(
 
     private fun validateToAnchor(
         objectKey: String,
-        chain: List<X509Certificate>,
+        pathCerts: List<X509Certificate>,
         trustAnchor: X509Certificate,
     ) {
-        val pathCerts = chain.filterNot { it.encoded.contentEquals(trustAnchor.encoded) }
         if (pathCerts.isEmpty()) {
-            throw S3CertChainException("Certificate chain $objectKey contains only the trust anchor")
+            throw S3CertChainException("Certificate chain $objectKey starts at the trust anchor")
         }
         try {
             val certPath = x509CertificateFactory.generateCertPath(pathCerts)
@@ -80,9 +85,27 @@ class S3CertChainProvider(
                 }
             CertPathValidator.getInstance("PKIX", BOUNCY_CASTLE_PROVIDER).validate(certPath, parameters)
         } catch (e: CertPathValidatorException) {
-            throw S3CertChainException("Certificate chain $objectKey does not validate to the pinned root", e)
+            throw S3CertChainException(
+                "Certificate chain $objectKey (${pathCerts.size} certificates, topmost issuer " +
+                    "'${pathCerts.last().issuerX500Principal.name}') does not validate to the pinned anchor " +
+                    "'${trustAnchor.subjectX500Principal.name}': ${e.message}",
+                e,
+            )
         } catch (e: CertificateException) {
             throw S3CertChainException("Certificate chain $objectKey is malformed", e)
+        }
+    }
+
+    private fun validateLeafCertificate(
+        objectKey: String,
+        chain: List<X509Certificate>,
+    ) {
+        val leaf = chain.first()
+        if (leaf.basicConstraints != NOT_A_CA) {
+            throw S3CertChainException("Leaf certificate of $objectKey is a CA, not an end entity")
+        }
+        if (leaf.keyUsage?.getOrNull(DIGITAL_SIGNATURE_INDEX) != true) {
+            throw S3CertChainException("Leaf certificate of $objectKey does not assert digitalSignature KeyUsage")
         }
     }
 }

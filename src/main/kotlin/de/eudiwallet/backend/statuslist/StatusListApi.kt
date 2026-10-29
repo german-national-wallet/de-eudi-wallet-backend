@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
+import java.time.Instant
 import java.util.UUID
 
 val STATUS_LIST_JWT_MEDIA_TYPE: MediaType = MediaType("application", "statuslist+jwt")
@@ -57,15 +58,16 @@ class StatusListApi(
             val head = statusListService.findListHead(id) ?: throw NoSuchListException()
             val pool = config.poolById(head.pool) ?: throw NoSuchListException()
             if (segment != config.pathSegment || poolId != pool.id) throw NoSuchListException()
-            if (matches(ifNoneMatch, etag(head.version))) {
+            val etag = etag(head.version, pool)
+            if (matches(ifNoneMatch, etag)) {
                 ResponseEntity.status(HttpStatus.NOT_MODIFIED)
-                    .eTag(etag(head.version))
+                    .eTag(etag)
                     .cacheControl(CacheControl.maxAge(pool.ttl))
                     .build()
             } else {
                 val list = statusListService.findList(id) ?: throw NoSuchListException()
                 ResponseEntity.ok()
-                    .eTag(etag(list.version))
+                    .eTag(etag(list.version, pool))
                     .cacheControl(CacheControl.maxAge(pool.ttl))
                     .contentType(STATUS_LIST_JWT_MEDIA_TYPE)
                     .body(tokenBuilder.build(list, pool).toByteArray())
@@ -100,7 +102,14 @@ class StatusListApi(
         }
     }
 
-    private fun etag(version: Int): String = "W/\"$version\""
+    private fun etag(
+        version: Int,
+        pool: Pool,
+    ): String {
+        val granularity = pool.tokenExpireAfter.seconds / 2
+        val timeMarker = Instant.now().epochSecond / granularity
+        return "W/\"$version-$timeMarker\""
+    }
 
     private fun matches(
         ifNoneMatch: String?,

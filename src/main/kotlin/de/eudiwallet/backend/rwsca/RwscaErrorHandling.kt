@@ -1,26 +1,20 @@
 package de.eudiwallet.backend.rwsca
 
-import de.eudiwallet.backend.shared.challengetoken.ChallengeVerificationException
+import de.eudiwallet.backend.shared.error.ErrorResponseCode
+import de.eudiwallet.backend.shared.error.ServiceErrorHandler
+import de.eudiwallet.backend.shared.error.TRACE_ID
 import de.eudiwallet.backend.shared.hsm.HsmException
-import de.eudiwallet.backend.shared.httpsignature.SignatureVerificationException
-import de.eudiwallet.backend.shared.jwt.JwtException
-import de.eudiwallet.backend.shared.mdvmtoken.MdvmTokenVerificationException
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.swagger.v3.oas.annotations.media.Schema
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.dao.DataAccessResourceFailureException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
-import org.springframework.validation.BindingResult
-import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
-import org.springframework.web.server.ServerWebInputException
 import java.time.Instant
-import java.time.LocalDateTime
 
 class MalformedPinPubKeyException(
     cause: Throwable,
@@ -66,159 +60,91 @@ class MalformedDataHashException(
 @ControllerAdvice(basePackages = ["de.eudiwallet.backend.rwsca"])
 @ConditionalOnProperty(prefix = "rwsca", name = ["enabled"], havingValue = "true")
 class RwscaErrorHandler(
-    private val telemetryService: TelemetryService,
-) {
+    telemetryService: TelemetryService,
+) : ServiceErrorHandler<RwscaErrorResponseCode, RwscaErrorResponse>(
+        telemetryService,
+        RwscaErrorResponseCode.entries,
+        RwscaErrorResponse.serializer(),
+    ) {
     private val log = KotlinLogging.logger {}
 
-    @ExceptionHandler(
-        DataAccessResourceFailureException::class,
-    )
-    fun handleServiceUnavailable(e: Exception): ResponseEntity<RwscaErrorResponse> {
-        log.error(e) {}
-        return createErrorResponseEntity(RwscaErrorResponseCode.DB_UNAVAILABLE, e)
-    }
-
     @ExceptionHandler(HsmException::class)
-    fun handleHsmException(e: HsmException): ResponseEntity<RwscaErrorResponse> {
-        log.error(e) {}
-        return createErrorResponseEntity(RwscaErrorResponseCode.HSM_UNAVAILABLE, e)
-    }
-
-    @ExceptionHandler(
-        ServerWebInputException::class,
-        MethodArgumentNotValidException::class,
-    )
-    fun handleBadRequest(e: Exception): ResponseEntity<RwscaErrorResponse> {
-        val description =
-            (e as? BindingResult)
-                ?.fieldErrors
-                ?.filterNot { it.isBindingFailure() }
-                ?.mapNotNull { it.defaultMessage }
-                ?.takeIf { it.isNotEmpty() }
-                ?.joinToString("; ")
-                ?: RwscaErrorResponseCode.BAD_REQUEST.description
-        return createErrorResponseEntity(RwscaErrorResponseCode.BAD_REQUEST, e, description)
-    }
+    fun handleHsmException(e: HsmException) = errorResponse(RwscaErrorResponseCode.HSM_UNAVAILABLE, e)
 
     @ExceptionHandler(AccountNotFoundException::class)
-    fun handleAccountNotFound(e: AccountNotFoundException) =
-        createErrorResponseEntity(RwscaErrorResponseCode.ACCOUNT_NOT_FOUND, e)
+    fun handleAccountNotFound(e: AccountNotFoundException) = errorResponse(RwscaErrorResponseCode.ACCOUNT_NOT_FOUND, e)
 
     @ExceptionHandler(AccountRevokedException::class)
-    fun handleAccountRevoked(e: AccountRevokedException) =
-        createErrorResponseEntity(RwscaErrorResponseCode.ACCOUNT_REVOKED, e)
+    fun handleAccountRevoked(e: AccountRevokedException) = errorResponse(RwscaErrorResponseCode.ACCOUNT_REVOKED, e)
 
     @ExceptionHandler(KeyAlreadyRegisteredException::class)
-    fun handleKeyAlreadyRegistered(e: KeyAlreadyRegisteredException): ResponseEntity<RwscaErrorResponse> {
+    fun handleKeyAlreadyRegistered(e: KeyAlreadyRegisteredException): ResponseEntity<String> {
         log.warn(e) {}
-        return createErrorResponseEntity(RwscaErrorResponseCode.KEY_ALREADY_REGISTERED, e)
+        return errorResponse(RwscaErrorResponseCode.KEY_ALREADY_REGISTERED, e)
     }
 
     @ExceptionHandler(PinSessionTokenVerificationException::class)
     fun handlePinSessionTokenVerification(e: PinSessionTokenVerificationException) =
-        createErrorResponseEntity(RwscaErrorResponseCode.PIN_SESSION_TOKEN_VERIFICATION_FAILURE, e)
+        errorResponse(RwscaErrorResponseCode.PIN_SESSION_TOKEN_VERIFICATION_FAILURE, e)
 
     @ExceptionHandler(WrappedPrvkVerificationException::class)
     fun handleWrappedPrvkVerification(e: WrappedPrvkVerificationException) =
-        createErrorResponseEntity(RwscaErrorResponseCode.WRAPPED_PRVK_VERIFICATION_FAILURE, e)
-
-    @ExceptionHandler(ChallengeVerificationException::class)
-    fun handleChallengeVerification(e: ChallengeVerificationException): ResponseEntity<RwscaErrorResponse> {
-        val errorCode =
-            if (e.cause is JwtException.Expired) {
-                RwscaErrorResponseCode.CHALLENGE_EXPIRED
-            } else {
-                RwscaErrorResponseCode.CHALLENGE_VERIFICATION_FAILURE
-            }
-        return createErrorResponseEntity(errorCode, e)
-    }
-
-    @ExceptionHandler(MdvmTokenVerificationException::class)
-    fun handleMdvmTokenVerification(e: MdvmTokenVerificationException) =
-        createErrorResponseEntity(RwscaErrorResponseCode.MDVM_TOKEN_VERIFICATION_FAILURE, e)
+        errorResponse(RwscaErrorResponseCode.WRAPPED_PRVK_VERIFICATION_FAILURE, e)
 
     @ExceptionHandler(PinAlreadyInitializedException::class)
     fun handlePinAlreadyInitialized(e: PinAlreadyInitializedException) =
-        createErrorResponseEntity(RwscaErrorResponseCode.PIN_ALREADY_INITIALIZED, e)
+        errorResponse(RwscaErrorResponseCode.PIN_ALREADY_INITIALIZED, e)
 
     @ExceptionHandler(AccountLockedException::class)
-    fun handleAccountLocked(e: AccountLockedException) =
-        createErrorResponseEntity(RwscaErrorResponseCode.ACCOUNT_LOCKED, e)
+    fun handleAccountLocked(e: AccountLockedException) = errorResponse(RwscaErrorResponseCode.ACCOUNT_LOCKED, e)
 
     @ExceptionHandler(MalformedPinPubKeyException::class)
     fun handleMalformedKey(e: MalformedPinPubKeyException) =
-        createErrorResponseEntity(RwscaErrorResponseCode.MALFORMED_PIN_PUB_KEY, e)
+        errorResponse(RwscaErrorResponseCode.MALFORMED_PIN_PUB_KEY, e)
 
     @ExceptionHandler(MalformedDataHashException::class)
     fun handleMalformedDataHash(e: MalformedDataHashException) =
-        createErrorResponseEntity(RwscaErrorResponseCode.MALFORMED_DATA_HASH, e)
+        errorResponse(RwscaErrorResponseCode.MALFORMED_DATA_HASH, e)
 
     @ExceptionHandler(PinNotInitializedException::class)
     fun handlePinNotInitialized(e: PinNotInitializedException) =
-        createErrorResponseEntity(RwscaErrorResponseCode.PIN_NOT_INITIALIZED, e)
+        errorResponse(RwscaErrorResponseCode.PIN_NOT_INITIALIZED, e)
 
     @ExceptionHandler(PinVerificationFailedException::class)
     fun handlePinVerificationFailed(e: PinVerificationFailedException) =
-        createErrorResponseEntity(
-            RwscaErrorResponseCode.PIN_VERIFICATION_FAILED,
-            e,
-            tryCounter = e.tryCounter,
-            tryAllowedAfter = e.tryAllowedAfter.toString(),
-        )
+        pinTryErrorResponse(RwscaErrorResponseCode.PIN_VERIFICATION_FAILED, e, e.tryCounter, e.tryAllowedAfter)
 
     @ExceptionHandler(PinRetryBlockedException::class)
     fun handlePinRetryBlocked(e: PinRetryBlockedException) =
-        createErrorResponseEntity(
-            RwscaErrorResponseCode.PIN_RETRY_BLOCKED,
-            e,
-            tryCounter = e.tryCounter,
-            tryAllowedAfter = e.tryAllowedAfter.toString(),
-        )
+        pinTryErrorResponse(RwscaErrorResponseCode.PIN_RETRY_BLOCKED, e, e.tryCounter, e.tryAllowedAfter)
 
-    @ExceptionHandler(SignatureVerificationException::class)
-    fun handleSignatureVerificationException(e: SignatureVerificationException): ResponseEntity<RwscaErrorResponse> {
-        log.warn(e) {}
-        return createErrorResponseEntity(RwscaErrorResponseCode.SIGNATURE_VERIFICATION_FAILURE, e)
-    }
-
-    @ExceptionHandler(Exception::class)
-    fun handleInternalServerError(e: Exception): ResponseEntity<RwscaErrorResponse> {
-        log.error(e) {}
-        return createErrorResponseEntity(RwscaErrorResponseCode.INTERNAL_SERVER_ERROR, e)
-    }
-
-    private fun createErrorResponseEntity(
+    override fun errorBody(
         code: RwscaErrorResponseCode,
-        cause: Throwable? = null,
-        description: String = code.description,
-        tryCounter: Int? = null,
-        tryAllowedAfter: String? = null,
-    ): ResponseEntity<RwscaErrorResponse> {
-        telemetryService.traceErrorCode(code.name)
-        telemetryService.traceException(cause)
-        return ResponseEntity(
-            RwscaErrorResponse(
-                code = code,
-                traceId = telemetryService.getCurrentTraceId(),
-                description = description,
-                tryCounter = tryCounter,
-                tryAllowedAfter = tryAllowedAfter,
-            ),
-            code.httpStatus,
-        )
+        description: String?,
+        traceId: String?,
+    ) = RwscaErrorResponse(code = code, description = description ?: code.description, traceId = traceId)
+
+    private fun pinTryErrorResponse(
+        code: RwscaErrorResponseCode,
+        cause: Throwable,
+        tryCounter: Int,
+        tryAllowedAfter: Instant,
+    ) = errorResponse(code, cause) { traceId ->
+        errorBody(code, null, traceId).copy(tryCounter = tryCounter, tryAllowedAfter = tryAllowedAfter.toString())
     }
 }
 
 enum class RwscaErrorResponseCode(
-    val httpStatus: HttpStatus,
+    override val httpStatus: HttpStatus,
     val description: String,
-) {
+) : ErrorResponseCode {
     DB_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "DB temporarily unavailable, please retry later"),
     HSM_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "HSM is temporarily unavailable, please retry later"),
     BAD_REQUEST(HttpStatus.BAD_REQUEST, "The request is malformed"),
     CHALLENGE_VERIFICATION_FAILURE(HttpStatus.BAD_REQUEST, "Challenge verification failed"),
     CHALLENGE_EXPIRED(HttpStatus.BAD_REQUEST, "Challenge expired"),
-    MDVM_TOKEN_VERIFICATION_FAILURE(HttpStatus.UNAUTHORIZED, "Malformed MDVM token"),
+    MDVM_TOKEN_VERIFICATION_FAILURE(HttpStatus.UNAUTHORIZED, "MDVM token verification failed"),
+    MDVM_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "MDVM token expired"),
     SIGNATURE_VERIFICATION_FAILURE(HttpStatus.UNAUTHORIZED, "Signature verification failed"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error"),
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "RwscaAccount not found"),
@@ -235,7 +161,6 @@ enum class RwscaErrorResponseCode(
     WRAPPED_PRVK_VERIFICATION_FAILURE(HttpStatus.UNAUTHORIZED, "Malformed $RWSCA_WI_WRAPPED_PRVK_FIELD"),
 }
 
-const val TRACE_ID = "trace_id"
 const val TRY_COUNTER = "try_counter"
 const val TRY_ALLOWED_AFTER = "try_allowed_after"
 
@@ -246,7 +171,7 @@ data class RwscaErrorResponse(
     @Schema(description = "Human-readable error description")
     val description: String? = null,
     @Schema(description = "Timestamp of the error occurrence", format = "date-time")
-    val timestamp: String = LocalDateTime.now().toString(),
+    val timestamp: String = Instant.now().toString(),
     @SerialName(TRACE_ID)
     @Schema(description = "Trace ID for correlating logs and debugging")
     val traceId: String? = null,

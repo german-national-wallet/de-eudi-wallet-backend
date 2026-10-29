@@ -18,7 +18,9 @@ private const val CHALLENGE_EXPIRED =
 private const val MALFORMED_WIA_PUB_KEY =
     """| 400 | `MALFORMED_WIA_PUB_KEY` | Provided WIA public key is malformed or not a valid EC key |"""
 private const val MDVM_TOKEN_VERIFICATION_FAILURE =
-    """| 401 | `MDVM_TOKEN_VERIFICATION_FAILURE` | Invalid or expired MDVM token |"""
+    """| 401 | `MDVM_TOKEN_VERIFICATION_FAILURE` | Invalid MDVM token |"""
+private const val MDVM_TOKEN_EXPIRED =
+    """| 401 | `MDVM_TOKEN_EXPIRED` | Expired MDVM token |"""
 private const val GENERIC_BAD_REQUEST = """| 400 | `BAD_REQUEST` | Bad request |"""
 private const val SIGNATURE_VERIFICATION_FAILURE =
     """| 401 | `SIGNATURE_VERIFICATION_FAILURE` | HTTP message signature verification failed |"""
@@ -60,6 +62,7 @@ revoked one cannot be deleted.
 $CHALLENGE_VERIFICATION_FAILURE
 $CHALLENGE_EXPIRED
 $MDVM_TOKEN_VERIFICATION_FAILURE
+$MDVM_TOKEN_EXPIRED
 $SIGNATURE_VERIFICATION_FAILURE
 $GENERIC_BAD_REQUEST
 $KEY_ALREADY_REGISTERED
@@ -88,6 +91,7 @@ Requires signature components `wpb-auth-sig` and `wpb-wia-sig` containing: @meth
 $CHALLENGE_VERIFICATION_FAILURE
 $CHALLENGE_EXPIRED
 $MDVM_TOKEN_VERIFICATION_FAILURE
+$MDVM_TOKEN_EXPIRED
 $SIGNATURE_VERIFICATION_FAILURE
 $WRONG_CONTENT_DIGEST
 $CONTENT_LENGTH_EXCEEDED
@@ -110,6 +114,7 @@ Not exposed to Wallet Instances: the gateway does not route it. A revoked accoun
 $CHALLENGE_VERIFICATION_FAILURE
 $CHALLENGE_EXPIRED
 $MDVM_TOKEN_VERIFICATION_FAILURE
+$MDVM_TOKEN_EXPIRED
 $SIGNATURE_VERIFICATION_FAILURE
 $GENERIC_BAD_REQUEST
 $ACCOUNT_REVOKED

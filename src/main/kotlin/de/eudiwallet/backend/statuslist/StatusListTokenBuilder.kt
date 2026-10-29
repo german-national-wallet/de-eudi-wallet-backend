@@ -49,7 +49,7 @@ class StatusListTokenBuilder(
                 .issuer(pool.issuer)
                 .subject(config.listUri(pool, list.id))
                 .issueTime(Date.from(now))
-                .expirationTime(Date.from(now.plus(pool.lifetime)))
+                .expirationTime(Date.from(now.plus(pool.tokenExpireAfter)))
                 .claim("ttl", pool.ttl.seconds)
                 .claim("status_list", statusList)
                 .build()

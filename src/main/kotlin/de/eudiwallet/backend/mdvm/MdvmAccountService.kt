@@ -1,6 +1,7 @@
 package de.eudiwallet.backend.mdvm
 
 import de.eudiwallet.backend.mdvm.MdvmAccount.Companion.toStorage
+import de.eudiwallet.backend.shared.crypto.toCanonicalP256
 import de.eudiwallet.backend.shared.mdvmtoken.MdvmAccountId
 import de.eudiwallet.backend.shared.messaging.MessagingMetrics
 import de.eudiwallet.backend.shared.messaging.MessagingUnavailableException
@@ -37,7 +38,7 @@ class MdvmAccountService(
             val account =
                 MdvmAccount(
                     mdvmAccountId = MdvmAccountId(UUID.randomUUID()),
-                    authPublicKey = authPubk,
+                    authPublicKey = authPubk.toCanonicalP256(),
                     deviceType = DeviceType.IOS,
                     deviceClass = deviceClass,
                     iosDeviceAttestation = deviceAttestation?.canonicalAttestation,
@@ -58,7 +59,7 @@ class MdvmAccountService(
             val account =
                 MdvmAccount(
                     mdvmAccountId = MdvmAccountId(UUID.randomUUID()),
-                    authPublicKey = authPubk,
+                    authPublicKey = authPubk.toCanonicalP256(),
                     deviceType = DeviceType.ANDROID,
                     deviceClass = deviceClass,
                     androidDeviceAttestation = attestationData?.attestationDetails,
@@ -81,27 +82,34 @@ class MdvmAccountService(
             mdvmAccountRepository.findByMdvmWiId(accountId.id)?.toDomain() ?: throw AccountNotFound(accountId)
         }
 
-    fun findNonRevokedAccounts(): Flow<MdvmAccount> =
-        mdvmAccountRepository.findAllByRevokedAtIsNull().map { it.toDomain() }
+    @Suppress("TooGenericExceptionCaught")
+    fun findNonRevokedAccounts(): Flow<Result<MdvmAccount>> =
+        mdvmAccountRepository.findAllByRevokedAtIsNull().map { entity ->
+            try {
+                Result.success(entity.toDomain())
+            } catch (ex: Exception) {
+                log.warn(ex) { "Unable to decode account ${entity.mdvmWiId}" }
+                Result.failure(ex)
+            }
+        }
 
-    suspend fun revokeByWiHandle(wiHandle: String): WalletInstanceRevocationOutcome =
-        telemetryService.withSpan("MdvmAccountService.revokeByWiHandle") {
-            val revokedId = mdvmAccountRepository.revokeByWiHandleReturningId(wiHandle)
-            val revokedBeforeId =
-                if (revokedId == null) mdvmAccountRepository.findRevokedMdvmWiIdByWiHandle(wiHandle) else null
+    suspend fun revokeByMdvmWiId(mdvmWiId: MdvmAccountId): WalletInstanceRevocationOutcome =
+        telemetryService.withSpan("MdvmAccountService.revokeByMdvmWiId") {
+            val revoked = mdvmAccountRepository.revokeByMdvmWiId(mdvmWiId.id)
+            val account = if (revoked <= 0) mdvmAccountRepository.findByMdvmWiId(mdvmWiId.id) else null
             when {
-                revokedId != null -> {
-                    publishRevocationPush(MdvmAccountId(revokedId))
+                revoked > 0 -> {
+                    publishRevocationPush(mdvmWiId)
                     WalletInstanceRevocationOutcome.APPLIED
                 }
 
-                revokedBeforeId != null -> {
-                    publishRevocationPush(MdvmAccountId(revokedBeforeId))
+                account?.revokedAt != null -> {
+                    publishRevocationPush(mdvmWiId)
                     WalletInstanceRevocationOutcome.ALREADY_REVOKED
                 }
 
                 else -> {
-                    WalletInstanceRevocationOutcome.UNKNOWN_HANDLE
+                    WalletInstanceRevocationOutcome.UNKNOWN_ACCOUNT
                 }
             }
         }

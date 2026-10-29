@@ -28,12 +28,19 @@ internal object Ck {
     const val CKA_VALUE = 0x11L
     const val CKA_SENSITIVE = 0x103L
     const val CKA_ENCRYPT = 0x104L
+    const val CKA_DECRYPT = 0x105L
     const val CKA_WRAP = 0x106L
+    const val CKA_UNWRAP = 0x107L
     const val CKA_SIGN = 0x108L
     const val CKA_VERIFY = 0x10aL
+    const val CKA_DERIVE = 0x10cL
     const val CKA_START_DATE = 0x110L
     const val CKA_END_DATE = 0x111L
+    const val CKA_VALUE_LEN = 0x161L
     const val CKA_EXTRACTABLE = 0x162L
+    const val CKA_NEVER_EXTRACTABLE = 0x164L
+    const val CKA_ALWAYS_SENSITIVE = 0x165L
+    const val CKA_MODIFIABLE = 0x170L
     const val CKA_EC_PARAMS = 0x180L
     const val CKA_EC_POINT = 0x181L
 

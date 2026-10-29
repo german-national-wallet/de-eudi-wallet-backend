@@ -22,6 +22,10 @@ sealed interface PushOutcome {
         val reason: String,
     ) : PushOutcome
 
+    data class Rejected(
+        val reason: String,
+    ) : PushOutcome
+
     data class Transient(
         val reason: String,
     ) : PushOutcome

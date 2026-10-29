@@ -14,9 +14,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.core.io.Resource
-import java.math.BigInteger
 import java.time.YearMonth
-import java.util.Locale
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 
@@ -24,6 +22,7 @@ import kotlin.time.Duration.Companion.hours
 class MakotoConfiguration(
     private val iosConfig: IOSIntegrityConfig,
     private val androidConfig: AndroidIntegrityConfig,
+    private val androidLeakedKeyLoader: AndroidLeakedKeyLoader,
 ) {
     @Bean
     fun makoto() =
@@ -50,6 +49,7 @@ class MakotoConfiguration(
                     revocation =
                         listOf(
                             AndroidRevocationList.GoogleDefaultLoaderConfig,
+                            AndroidLeakedKeyLoader.Configuration(androidLeakedKeyLoader),
                             AndroidRevocationList.InMemoryLoader.Configuration(
                                 androidConfig.revocationListResource.loadAndroidRevocationList(),
                             ),
@@ -123,7 +123,7 @@ class MakotoConfiguration(
 
             val list =
                 AndroidRevocationList.deserialize(json).run {
-                    copy(entries = entries.mapKeys { (serial, _) -> serial.normalize() })
+                    copy(entries = entries.mapKeys { (serial, _) -> serial.normalizeSerial() })
                 }
             log.info { "Loaded ${list.entries.size} additional Android revocation entries from $description" }
 
@@ -132,9 +132,6 @@ class MakotoConfiguration(
             log.info { "No additional Android revocation entries provided" }
             AndroidRevocationList(emptyMap())
         }
-
-    @Suppress("MagicNumber")
-    private fun String.normalize(): String = BigInteger(this, 16).toString(16).lowercase(Locale.getDefault())
 
     private val log = KotlinLogging.logger {}
 }

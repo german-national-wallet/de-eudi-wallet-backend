@@ -21,15 +21,8 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.http.HttpStatus
@@ -45,7 +38,6 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import java.security.interfaces.ECPublicKey
 import java.security.spec.InvalidKeySpecException
-import java.util.UUID
 
 const val WPB_AUTH_SIGNATURE_NAME = "wpb-auth-sig"
 const val WPB_WIA_SIGNATURE_NAME = "wpb-wia-sig"
@@ -88,7 +80,6 @@ const val WPB_WI_ID_FIELD = "wpb_wi_id"
 const val WPB_WI_REVOCATION_CODE_FIELD = "wpb_wi_revocation_code"
 const val WPB_WIA_FIELD = "wpb_wia"
 const val WI_WIA_PUBK_FIELD = "wi_wia_pubk"
-const val WPB_CLIENT_INSTANCE_ID_FIELD = "wpb_client_instance_id"
 
 @Serializable
 data class WpbChallengeResponse(
@@ -129,9 +120,6 @@ data class WpbAttestationRequest(
     @SerialName(WI_WIA_PUBK_FIELD)
     @Schema(description = "Base64-encoded X.509 EC public key")
     val wiWiaPubk: String,
-    @SerialName(WPB_CLIENT_INSTANCE_ID_FIELD)
-    @Schema(description = "Handle for the status-list entry; omit to allocate a new one; reuse to renew.")
-    val wpbClientInstanceId: WpbClientInstanceId?,
 )
 
 @Serializable
@@ -139,37 +127,7 @@ data class WpbAttestationResponse(
     @SerialName(WPB_WIA_FIELD)
     @Schema(description = "Wallet Instance Attestation", example = WIA_EXAMPLE)
     val wpbWia: String,
-    @SerialName(WPB_CLIENT_INSTANCE_ID_FIELD)
-    @Schema(description = "Handle of the provisioned status-list entry.")
-    val wpbClientInstanceId: WpbClientInstanceId,
 )
-
-@Serializable(with = WpbClientInstanceIdSerializer::class)
-@JvmInline
-value class WpbClientInstanceId(
-    val id: UUID,
-) {
-    override fun toString() = id.toString()
-}
-
-object WpbClientInstanceIdSerializer : KSerializer<WpbClientInstanceId> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("WpbClientInstanceId", PrimitiveKind.STRING)
-
-    override fun serialize(
-        encoder: Encoder,
-        value: WpbClientInstanceId,
-    ) {
-        encoder.encodeString(value.toString())
-    }
-
-    override fun deserialize(decoder: Decoder): WpbClientInstanceId =
-        try {
-            WpbClientInstanceId(UUID.fromString(decoder.decodeString()))
-        } catch (ex: java.lang.IllegalArgumentException) {
-            throw SerializationException("Cannot deserialize WpbClientInstanceId", ex)
-        }
-}
 
 @RestController
 @RequestMapping("/v1/wpb")
@@ -272,11 +230,8 @@ class WpbApi(
             REQUIRED_SIGNATURE_ATTESTATION_COMPONENTS,
             wiWiaPubk,
         )
-        val statusReference = wpbAccountService.provisionWiaEntry(account, request.wpbClientInstanceId?.id)
-        WpbAttestationResponse(
-            wiaBuilder.createAndSerializeToJwt(wiWiaPubk, statusReference),
-            WpbClientInstanceId(statusReference.clientInstanceId),
-        )
+        val statusReference = wpbAccountService.provisionWiaEntry(account)
+        WpbAttestationResponse(wiaBuilder.createAndSerializeToJwt(wiWiaPubk, statusReference))
     }
 
     @Operation(

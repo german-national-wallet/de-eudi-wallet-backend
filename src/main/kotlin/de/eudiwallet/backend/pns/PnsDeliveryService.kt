@@ -38,12 +38,20 @@ class PnsDeliveryService(
                     log.warn { "Dropping push notification ${event.eventId} for $accountId: ${outcome.reason}" }
                 }
 
+                is PushOutcome.Rejected -> {
+                    pnsMetrics.countPushNotification(PushMetricOutcome.REJECTED)
+                    throw PushDeliveryRejectedException(event.eventId, outcome.reason.describing(registration))
+                }
+
                 is PushOutcome.Transient -> {
                     pnsMetrics.countPushNotification(PushMetricOutcome.TRANSIENT)
-                    throw PushDeliveryUnavailableException(event.eventId, outcome.reason)
+                    throw PushDeliveryUnavailableException(event.eventId, outcome.reason.describing(registration))
                 }
             }
         }
+
+    private fun String.describing(registration: PnsRegistrationEntity) =
+        "$this (account ${registration.accountId}, registered ${registration.registeredAt})"
 
     private fun PushNotificationEvent.accountUuid(): UUID =
         try {
@@ -56,7 +64,17 @@ class PnsDeliveryService(
         PushNotification(titleLocKey = titleLocKey, bodyLocKey = bodyLocKey, data = data)
 }
 
-class PushDeliveryUnavailableException(
+sealed class PushDeliveryFailedException(
     eventId: String,
     reason: String,
 ) : RuntimeException("Push notification $eventId could not be delivered: $reason")
+
+class PushDeliveryUnavailableException(
+    eventId: String,
+    reason: String,
+) : PushDeliveryFailedException(eventId, reason)
+
+class PushDeliveryRejectedException(
+    eventId: String,
+    reason: String,
+) : PushDeliveryFailedException(eventId, reason)

@@ -118,8 +118,12 @@ class FcmPushClient(
                 PushOutcome.Terminal("$errorCode (HTTP $status)")
             }
 
+            errorCode == THIRD_PARTY_AUTH_ERROR_CODE -> {
+                PushOutcome.Rejected("$errorCode (HTTP $status)${error.diagnostics()}")
+            }
+
             errorCode != null -> {
-                PushOutcome.Transient("$errorCode (HTTP $status)")
+                PushOutcome.Transient("$errorCode (HTTP $status)${error.diagnostics()}")
             }
 
             else -> {
@@ -139,6 +143,16 @@ class FcmPushClient(
         const val INVALID_ARGUMENT_CODE = "INVALID_ARGUMENT"
         const val TOKEN_FIELD = "token"
         const val QUALIFIED_TOKEN_FIELD = "message.token"
+        const val APNS_ERROR_TYPE = "type.googleapis.com/google.firebase.fcm.v1.ApnsError"
+        const val THIRD_PARTY_AUTH_ERROR_CODE = "THIRD_PARTY_AUTH_ERROR"
+    }
+
+    private fun FcmError.diagnostics(): String {
+        val apns = details.firstOrNull { it.type == APNS_ERROR_TYPE }
+        return buildString {
+            message?.let { append(": $it") }
+            apns?.let { append(" [APNs ${it.statusCode ?: "?"} ${it.reason ?: "no reason"}]") }
+        }
     }
 
     private fun FcmError?.indictsToken(): Boolean =
@@ -249,6 +263,7 @@ data class FcmErrorResponse(
 @Serializable
 data class FcmError(
     val code: Int = 0,
+    val message: String? = null,
     val status: String? = null,
     val details: List<FcmErrorDetail> = emptyList(),
 )
@@ -258,6 +273,8 @@ data class FcmErrorDetail(
     @SerialName("@type") val type: String? = null,
     val errorCode: String? = null,
     val fieldViolations: List<FcmFieldViolation> = emptyList(),
+    val statusCode: Int? = null,
+    val reason: String? = null,
 )
 
 @Serializable
