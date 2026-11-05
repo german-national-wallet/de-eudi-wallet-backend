@@ -27,9 +27,11 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.springframework.beans.factory.annotation.Qualifier
@@ -226,6 +228,7 @@ class RwscaApi(
     private val rwscaBoundWrappedPrvkBuilder: RwscaBoundWrappedPrvkBuilder,
     private val wteBuilder: WalletTrustEvidenceBuilder,
     private val challengeTokenBuilder: ChallengeTokenBuilder,
+    private val ioDispatcher: CoroutineDispatcher,
 ) {
     @Operation(
         summary = "Generate a challenge for remote WSCA operations",
@@ -506,7 +509,7 @@ class RwscaApi(
     ): MdvmToken {
         challengeTokenBuilder.parseAndValidate(rwscaAuthChallenge, config.issuer)
 
-        val parsedMdvmToken = mdvmTokenParser.parseAndValidate(mdvmToken)
+        val parsedMdvmToken = withContext(ioDispatcher) { mdvmTokenParser.parseAndValidate(mdvmToken) }
 
         httpSignatureVerifier.verifyRequestSignature(
             httpRequest,

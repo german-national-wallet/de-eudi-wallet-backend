@@ -34,6 +34,7 @@ class RwscaConfiguration(
     val rwscdAeadSymkPrefix: String,
     val rwscdWteRootCertPath: Resource,
     val wiSlot: SlotConfig,
+    val pinEncryptionKey: String,
     val pinRetry: PinRetryConfigurationProperties = PinRetryConfigurationProperties(),
 ) {
     val rwscdWteRootCert: X509Certificate = readX509Cert(rwscdWteRootCertPath).apply { checkValidity() }
@@ -115,6 +116,9 @@ class RwscaKeyProvider(
             ioDispatcher,
             keyRolloverMetrics,
         ).also { it.initialize() }
+
+    @Bean
+    fun pinEncryptionKey(): PinEncryptionKey = PinEncryptionKey(config.pinEncryptionKey)
 
     @Bean("rwscdMasterLineage")
     @Profile("build-docs")

@@ -77,17 +77,19 @@ class HttpSignatureVerifier(
         signatureLabel: String,
         requiredSignatureComponents: List<String>,
         ecPublicKey: ECPublicKey,
+        signatureDecrypter: ((ByteArray) -> ByteArray)? = null,
     ) = telemetryService.withSpanSync("HttpSignatureVerifier.verifyRequestSignature") {
         val entry = findSignatureEntry(request, signatureLabel)
         verifySignedComponents(request, entry.metadata, requiredSignatureComponents, signatureLabel)
         val algorithm =
             signatureAlgorithmMapping[entry.metadata.parameters.alg]
                 ?: throw SignatureVerificationException.WrongAlgorithm()
+        val signature = signatureDecrypter?.invoke(entry.signature) ?: entry.signature
         val base = computeSignatureBase(request, entry.metadata)
         val signatureVerifier = signatureVerifier(algorithm, ecPublicKey, base)
         val verificationResult =
             try {
-                signatureVerifier.verify(entry.signature)
+                signatureVerifier.verify(signature)
             } catch (_: SignatureException) {
                 false
             }

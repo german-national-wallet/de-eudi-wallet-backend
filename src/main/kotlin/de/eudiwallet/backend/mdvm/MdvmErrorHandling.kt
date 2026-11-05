@@ -42,7 +42,7 @@ abstract class MdvmException(
     abstract fun diagnosticDetails(): Map<String, String>
 }
 
-private const val MDVM_ERROR_KEY = "mdvm.error"
+const val MDVM_ERROR_KEY = "mdvm.error"
 private const val MDVM_ATTESTATION_KEY = "mdvm.attestation"
 private const val MDVM_ATTESTATION_RESULT_KEY = "mdvm.attestation_result"
 private const val MDVM_SIGNAL_KEY = "mdvm.signal"
@@ -749,6 +749,9 @@ enum class InternalErrorCode(
     DV_SKIP_INTEGRITY_CHECKS_NOT_ALLOWED(MdvmErrorResponseCode.SKIP_INTEGRITY_CHECKS_NOT_ALLOWED),
     DV_VULNERABLE_DEVICE_CLASS_FIXABLE(MdvmErrorResponseCode.DEVICE_VULNERABLE_FIXABLE),
     DV_VULNERABLE_DEVICE_CLASS_UNFIXABLE(MdvmErrorResponseCode.DEVICE_VULNERABLE_UNFIXABLE),
+
+    RASP_UNKNOWN_KEY(MdvmErrorResponseCode.OUTDATED_APP_VERSION),
+    RASP_RESPONSE_INVALID(MdvmErrorResponseCode.SECURITY_VIOLATION),
 }
 
 @Serializable

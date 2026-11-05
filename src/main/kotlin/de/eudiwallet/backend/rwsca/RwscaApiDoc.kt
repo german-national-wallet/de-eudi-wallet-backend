@@ -19,6 +19,12 @@ internal const val WTE_EXAMPLE =
     "Header {typ: ${WalletTrustEvidenceBuilder.JWT_TYPE}, alg: ES256, x5c: [<WTE signing chain>]}; " +
         "payload {iss, attested_keys: [<EC P-256 JWK>], key_storage: [iso_18045_high], " +
         "user_authentication: [iso_18045_high], nonce: <pp_c_nonce>, iat, exp}."
+internal const val ENCRYPTED_PIN_VALUE_EXAMPLE =
+    "JWE compact serialization: header {typ: $PIN_PUBK_JWE_TYPE, alg: ECDH-ES, enc: A256GCM, " +
+        "kid: $PIN_ENCRYPTION_KID, epk}; empty encrypted key."
+internal const val PIN_ENCRYPTION_JWK_EXAMPLE =
+    """{"kty":"EC","crv":"P-256","x":"qQNMuzMT08YiDVgoayr6glNk_uaIQ2DAJli7ybBOJJA",""" +
+        """"y":"kehDTJKvD16PZ4QRE7Te-Ecm99y8plrLaINnqabvjj8","kid":"$PIN_ENCRYPTION_KID","use":"enc","alg":"ECDH-ES"}"""
 internal const val BASE64_ENCODED_SIGNATURE_EXAMPLE =
     "MEUCIQC9dIZlclNFVYBmfU9FRNn2dkUQdXiQ9nAYMhBFIwIwAiAm0DQiB5CMaXw2KUXYEiKHA1Z4STAhAjRyYVI0Eg=="
 
@@ -109,6 +115,68 @@ $ACCOUNT_REVOKED
 $ACCOUNT_LOCKED
 $ACCOUNT_NOT_FOUND
 $PIN_ALREADY_INITIALIZED
+$INTERNAL_SERVER_ERROR
+$DB_UNAVAILABLE
+"""
+
+private const val ENCRYPTED_PIN_SIGNATURE =
+    """The `rwsca-pin-sig` value in `Signature` is the sf-binary of the UTF-8 bytes of a JWE compact serialization (`typ` "$PIN_SIGNATURE_JWE_TYPE", `alg` ECDH-ES, `enc` A256GCM, `kid` "$PIN_ENCRYPTION_KID", no `zip`, no `crit`) encrypted to `$RWSCA_PIN_ENC_PUBK_FIELD` from `/v2/rwsca/wiMetaData`; its payload is the DER ECDSA signature. A value that does not decrypt is rejected with 401 `SIGNATURE_VERIFICATION_FAILURE` and costs no PIN try."""
+
+internal const val WI_METADATA_DOCS = """
+No signatures required.
+
+Returns `$RWSCA_PIN_ENC_PUBK_FIELD`, the P-256 public JWK the WI encrypts its PIN signature and `$WI_RWSCA_PIN_PUBK_FIELD` to.
+
+| HTTP Status | Error Code | Description |
+|---|---|---|
+$INTERNAL_SERVER_ERROR
+"""
+
+internal const val INITIALIZE_PIN_AND_START_PIN_SESSION_V2_DOCS = """
+Requires signature components `rwsca-auth-sig` and `rwsca-pin-sig` containing: @method, @path, header(rwsca-account-id), header(auth-challenge), header(mdvm-token), header(content-digest)
+
+$ENCRYPTED_PIN_SIGNATURE
+
+`$WI_RWSCA_PIN_PUBK_FIELD` is a JWE of the same construction with `typ` "$PIN_PUBK_JWE_TYPE", its payload the DER X.509 public key; one that does not decrypt is rejected with 400 `MALFORMED_PIN_PUB_KEY`.
+
+| HTTP Status | Error Code | Description |
+|---|---|---|
+$CHALLENGE_VERIFICATION_FAILURE
+$CHALLENGE_EXPIRED
+$MDVM_TOKEN_VERIFICATION_FAILURE
+$MDVM_TOKEN_EXPIRED
+$SIGNATURE_VERIFICATION_FAILURE
+$WRONG_CONTENT_DIGEST
+$CONTENT_LENGTH_EXCEEDED
+$GENERIC_BAD_REQUEST
+$MALFORMED_PIN_PUB_KEY
+$ACCOUNT_REVOKED
+$ACCOUNT_LOCKED
+$ACCOUNT_NOT_FOUND
+$PIN_ALREADY_INITIALIZED
+$INTERNAL_SERVER_ERROR
+$DB_UNAVAILABLE
+"""
+
+internal const val START_PIN_SESSION_V2_DOCS = """
+Requires signature components `rwsca-auth-sig` and `rwsca-pin-sig` containing: @method, @path, header(rwsca-account-id), header(auth-challenge), header(mdvm-token)
+
+$ENCRYPTED_PIN_SIGNATURE
+
+| HTTP Status | Error Code | Description |
+|---|---|---|
+$CHALLENGE_VERIFICATION_FAILURE
+$CHALLENGE_EXPIRED
+$MDVM_TOKEN_VERIFICATION_FAILURE
+$MDVM_TOKEN_EXPIRED
+$SIGNATURE_VERIFICATION_FAILURE
+$GENERIC_BAD_REQUEST
+$PIN_VERIFICATION_FAILED
+$ACCOUNT_REVOKED
+$ACCOUNT_LOCKED
+$ACCOUNT_NOT_FOUND
+$PIN_NOT_INITIALIZED
+$PIN_RETRY_BLOCKED
 $INTERNAL_SERVER_ERROR
 $DB_UNAVAILABLE
 """

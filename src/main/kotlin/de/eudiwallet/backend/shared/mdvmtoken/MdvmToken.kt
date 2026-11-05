@@ -2,6 +2,7 @@ package de.eudiwallet.backend.shared.mdvmtoken
 
 import com.nimbusds.jose.JWSAlgorithm
 import com.nimbusds.jwt.SignedJWT
+import de.eudiwallet.backend.shared.crl.CrlCache
 import de.eudiwallet.backend.shared.jwt.JwtException
 import de.eudiwallet.backend.shared.jwt.getConfirmationKey
 import de.eudiwallet.backend.shared.jwt.getUUIDClaim
@@ -61,6 +62,7 @@ data class MdvmToken(
 @Component
 class MdvmTokenParser(
     private val mdvmConfiguration: MdvmTokenConfiguration,
+    private val crlCache: CrlCache,
 ) {
     fun parseAndValidate(jwtString: String): MdvmToken {
         val jwt =
@@ -73,7 +75,7 @@ class MdvmTokenParser(
             jwt.validateType(MdvmToken.JWT_TYPE)
             jwt.validateAlgorithm(JWSAlgorithm.ES256)
             jwt.validateIssuer(mdvmConfiguration.issuer)
-            val certificate = jwt.validateCertificateChain(mdvmConfiguration.mdvmRootCert)
+            val certificate = jwt.validateCertificateChain(mdvmConfiguration.mdvmRootCert, crlCache)
             jwt.validateEcdsaSignature(certificate.publicKey as ECPublicKey)
             jwt.validateExpirationTime()
             return MdvmToken(

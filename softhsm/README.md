@@ -37,6 +37,7 @@ softhsm/
     dev-pki/roots/     # nw-root.pem, mdvm-root.pem: the roots the `dev-pki` profile pins (`DEV_PKI_DIR`)
     dev-pki/chains/    # leaf -> root chains seeded into the simulated S3 bucket: MDVM attestation under
                        # mdvm-root, WIA, WTE and status list under nw-root
+    dev-pki/crls/      # nw-root.crl, mdvm-root.crl: each root's empty CRL, named by its leaves' CRL distribution point
 ```
 
 Nothing under `generated/` is committed, and none of it reaches a deployed stage: those pin the real PKI through the
@@ -45,26 +46,28 @@ Helm chart and hold their keys in a real HSM. Only the local compose images bake
 ## Generating the fixtures
 
 ```bash
-# HSM_MODULE_LIBRARY, HSM_SLOT_LABEL and HSM_SLOT_PIN exported; softhsm/.venv/bin/python on macOS
+# HSM_MODULE_LIBRARY, HSM_SLOT_LABEL and HSM_SLOT_PIN exported
+# on macOS first: source softhsm/.venv/bin/activate
 python3 softhsm/gen-keys.py
 ```
 
 Writes a SoftHSM config with a private token store, initialises the slot in it and generates the symmetric keys and EC
-P-256 keypairs on the token, with the attribute template of the real HSM keys. No key material
-exists outside the token. It then mints the two dev roots and the leaf chains that wrap the keypairs' public keys; the
+P-256 keypairs on the token, with the attribute template of the real HSM keys. No key material exists outside the token.
+It then mints the two dev roots, an empty CRL per root and the leaf chains that wrap the keypairs' public keys; the
 roots' private keys are discarded. It refuses to run while `generated/` exists, and removes it again if it fails: delete
-`generated/` to start over (this also drops the slot), run the generator again, then re-run `docker compose up -d s3-init` so the
-bucket holds the new chains, and rebuild the compose images (`docker compose up --build`) because they copy
+`generated/` to start over (this also drops the slot), run the generator again, then re-run
+`docker compose up -d s3-init` so the bucket holds the new chains, and rebuild the compose images
+(`docker compose up --build`) because they copy
 `tokens/`.
 
 Every SoftHSM client — the app, `softhsm2-util`, `pkcs11-tool` — finds the slot only with
-`SOFTHSM2_CONF` pointing at the generated config. Both that path and the token store path inside the config are
-relative to the repository root, so run the clients from there:
+`SOFTHSM2_CONF` pointing at the generated config. Both that path and the token store path inside the config are relative
+to the repository root, so run the clients from there:
 
 ```bash
 export SOFTHSM2_CONF=softhsm/generated/softhsm2.conf
 softhsm2-util --show-slots
 ```
 
-The compose image copies the token store into the system-wide location instead: it is private to one container
-already. A token store written on macOS loads on Linux and vice versa (SoftHSM 2.6.1, file backend).
+The compose image copies the token store into the system-wide location instead: it is private to one container already.
+A token store written on macOS loads on Linux and vice versa (SoftHSM 2.6.1, file backend).

@@ -43,6 +43,9 @@ const val SKIP_INTEGRITY_CHECKS_HEADER = "Skip-Integrity-Checks"
 const val MDVM_WI_ID_HEADER = "Mdvm-Wi-Id"
 
 const val MDVM_AUTH_CHALLENGE_FIELD = "mdvm_auth_challenge"
+const val MDVM_RASP_CHALLENGE_FIELD = "mdvm_rasp_challenge"
+const val WI_RASP_SYMK_KID_FIELD = "wi_rasp_symk_kid"
+const val WI_RASP_RESPONSE_FIELD = "wi_rasp_response"
 const val WI_DEVICE_CLASS_FIELD = "wi_device_class"
 const val WI_ANDROID_KEY_ATTESTATION_FIELD = "wi_android_key_attestation"
 const val WI_MDVM_AUTH_PUBK_FIELD = "wi_mdvm_auth_pubk"
@@ -83,10 +86,20 @@ val REQUIRED_SIGNATURE_DELETE_ACCOUNT_COMPONENTS =
     )
 
 @Serializable
+data class ChallengeRequest(
+    @SerialName(WI_RASP_SYMK_KID_FIELD)
+    @Schema(description = "Id of the RASP secret key")
+    val raspKeyId: String? = null,
+)
+
+@Serializable
 data class ChallengeResponse(
     @SerialName(MDVM_AUTH_CHALLENGE_FIELD)
     @Schema(description = "Base64url-encoded MDVM authentication challenge JWT", example = MDVM_AUTH_CHALLENGE_EXAMPLE)
     val authChallenge: String,
+    @SerialName(MDVM_RASP_CHALLENGE_FIELD)
+    @Schema(description = "Base64-encoded RASP challenge; present only if $WI_RASP_SYMK_KID_FIELD was sent")
+    val raspChallenge: String? = null,
 )
 
 @Serializable
@@ -103,6 +116,12 @@ data class AndroidRegisterRequest(
         example = ANDROID_KEY_ATTESTATION_EXAMPLE,
     )
     val keyAttestationCertificateChain: List<String>,
+    @SerialName(WI_RASP_SYMK_KID_FIELD)
+    @Schema(description = "Id of the RASP secret key")
+    val raspKeyId: String? = null,
+    @SerialName(WI_RASP_RESPONSE_FIELD)
+    @Schema(description = "Base64-encoded RASP response. Required if $WI_RASP_SYMK_KID_FIELD is set")
+    val raspResponse: String? = null,
 )
 
 @Serializable
@@ -116,6 +135,12 @@ data class AndroidRenewalRequest(
         example = ANDROID_KEY_ATTESTATION_EXAMPLE,
     )
     val keyAttestationCertificateChain: List<String>,
+    @SerialName(WI_RASP_SYMK_KID_FIELD)
+    @Schema(description = "Id of the RASP secret key")
+    val raspKeyId: String? = null,
+    @SerialName(WI_RASP_RESPONSE_FIELD)
+    @Schema(description = "Base64-encoded RASP response. Required if $WI_RASP_SYMK_KID_FIELD is set")
+    val raspResponse: String? = null,
 )
 
 @Serializable
@@ -132,6 +157,12 @@ data class IosRegisterRequest(
     @SerialName(PAP_DEVICECHECK_ASSERTION_FIELD)
     @Schema(description = "Base64-encoded Apple DeviceCheck assertion", example = DEVICECHECK_ASSERTION_EXAMPLE)
     val deviceAssertion: String,
+    @SerialName(WI_RASP_SYMK_KID_FIELD)
+    @Schema(description = "Id of the RASP secret key")
+    val raspKeyId: String? = null,
+    @SerialName(WI_RASP_RESPONSE_FIELD)
+    @Schema(description = "Base64-encoded RASP response. Required if $WI_RASP_SYMK_KID_FIELD is set")
+    val raspResponse: String? = null,
 )
 
 @Serializable
@@ -142,6 +173,12 @@ data class IosRenewalRequest(
     @SerialName(PAP_DEVICECHECK_ASSERTION_FIELD)
     @Schema(description = "Base64-encoded Apple DeviceCheck assertion", example = DEVICECHECK_ASSERTION_EXAMPLE)
     val deviceAssertion: String,
+    @SerialName(WI_RASP_SYMK_KID_FIELD)
+    @Schema(description = "Id of the RASP secret key")
+    val raspKeyId: String? = null,
+    @SerialName(WI_RASP_RESPONSE_FIELD)
+    @Schema(description = "Base64-encoded RASP response. Required if $WI_RASP_SYMK_KID_FIELD is set")
+    val raspResponse: String? = null,
 )
 
 @Serializable
@@ -179,6 +216,7 @@ class MdvmApi(
     private val telemetryService: TelemetryService,
     private val mdvmTokenBuilder: MdvmTokenBuilder,
     private val challengeTokenBuilder: ChallengeTokenBuilder,
+    private val raspVerifier: RaspVerifier,
 ) {
     @Operation(
         summary = "Generate an authentication challenge for MDVM operations",
@@ -186,9 +224,15 @@ class MdvmApi(
     )
     @PostMapping("/challenge")
     @ResponseBody
-    suspend fun challenge(): ChallengeResponse =
+    suspend fun challenge(
+        @RequestBody(required = false) request: ChallengeRequest?,
+    ): ChallengeResponse =
         telemetryService.withSpan("MdvmApi.challenge") {
-            ChallengeResponse(challengeTokenBuilder.createAndSerializeToJwt(config.issuer))
+            val authChallenge = challengeTokenBuilder.createAndSerializeToJwt(config.issuer)
+            ChallengeResponse(
+                authChallenge,
+                request?.raspKeyId?.let { raspVerifier.createChallenge(it, authChallenge) },
+            )
         }
 
     @Operation(
@@ -215,6 +259,7 @@ class MdvmApi(
                     httpRequest,
                     REQUIRED_SIGNATURE_REGISTER_COMPONENTS,
                 )
+            raspVerifier.verifyResponse(request.raspKeyId, authChallenge, request.raspResponse, skipIntegrityChecks)
 
             val attestationNonce = authChallenge.toSha256()
             val attestationData =
@@ -276,6 +321,7 @@ class MdvmApi(
                 )
             account.requireNotRevoked()
             account.verifyDeviceType(DeviceType.ANDROID)
+            raspVerifier.verifyResponse(request.raspKeyId, authChallenge, request.raspResponse, skipIntegrityChecks)
             val authPubk = account.authPublicKey
 
             val attestationNonce = authChallenge.toSha256()
@@ -342,6 +388,7 @@ class MdvmApi(
                     httpRequest,
                     REQUIRED_SIGNATURE_REGISTER_COMPONENTS,
                 )
+            raspVerifier.verifyResponse(request.raspKeyId, authChallenge, request.raspResponse, skipIntegrityChecks)
 
             val keyAttestationNonce = authChallenge.toSha256()
             val attestation =
@@ -412,6 +459,7 @@ class MdvmApi(
                 )
             account.requireNotRevoked()
             account.verifyDeviceType(DeviceType.IOS)
+            raspVerifier.verifyResponse(request.raspKeyId, authChallenge, request.raspResponse, skipIntegrityChecks)
             val authPubk = account.authPublicKey
 
             val keyAssertionNonce = authChallenge.toSha256()

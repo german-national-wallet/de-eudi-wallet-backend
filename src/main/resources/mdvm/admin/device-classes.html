@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>MDVM admin – vulnerable device classes</title>
+    <link rel="stylesheet" href="admin.css">
+    <script src="admin.js" defer></script>
+    <script src="device-classes.js" defer></script>
+</head>
+<body>
+<header>
+    <h1><a href="./">MDVM admin</a> – vulnerable device classes</h1>
+    <a href="../auth/logout">Log out</a>
+</header>
+<p>Non-revoked accounts on a vulnerable device class, from a dry run on page load. Revoking publishes a revocation for
+    every account on an unfixable class.</p>
+<p id="summary"></p>
+<table>
+    <thead>
+    <tr>
+        <th>Platform</th>
+        <th>Vulnerability</th>
+        <th>Classification</th>
+        <th>Accounts affected</th>
+    </tr>
+    </thead>
+    <tbody id="device-classes"></tbody>
+</table>
+<p>
+    <button type="button" id="revoke" disabled>Revoke accounts on unfixable classes</button>
+</p>
+<p id="message" class="message" role="status"></p>
+</body>
+</html>

@@ -18,9 +18,14 @@ inline fun <reified T : Any> runWalletService(
 ) {
     registerCryptoProviders()
     logCryptoProviders()
+    enableOtelV3Preview()
     runApplication<T>(*args) {
         setAdditionalProfiles(profile)
     }
+}
+
+fun enableOtelV3Preview() {
+    System.setProperty("otel.instrumentation.common.v3-preview", "true")
 }
 
 fun logCryptoProviders() {

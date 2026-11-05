@@ -15,6 +15,8 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Size
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -87,6 +89,7 @@ class PnsApi(
     private val httpSignatureVerifier: HttpSignatureVerifier,
     private val pnsService: PnsService,
     private val telemetryService: TelemetryService,
+    private val ioDispatcher: CoroutineDispatcher,
 ) {
     @Operation(
         summary = "Generate a challenge for push-notification registration",
@@ -144,7 +147,7 @@ class PnsApi(
     ): MdvmAccountId {
         challengeTokenBuilder.parseAndValidate(authChallenge, config.issuer)
 
-        val parsedMdvmToken = mdvmTokenParser.parseAndValidate(mdvmToken)
+        val parsedMdvmToken = withContext(ioDispatcher) { mdvmTokenParser.parseAndValidate(mdvmToken) }
         val wiMdvmAuthPubk = parsedMdvmToken.authKey
 
         httpSignatureVerifier.verifyRequestSignature(

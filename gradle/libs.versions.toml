@@ -3,7 +3,7 @@ cyclonedx = "3.5.1"
 java = "25"
 kotlin = "2.4.10"
 detekt = "2.0.0-alpha.6"
-spring-boot = "4.1.1"
+spring-boot = "4.1.2"
 kotest = "6.2.6"
 ktlint = "1.8.0"
 
@@ -33,7 +33,7 @@ nimbus-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version = "10.10" }
 bouncycastle-pkix-jdk18 = { module = "org.bouncycastle:bcpkix-jdk18on", version = "1.86" }
 ngengine-bech32 = { module = "org.ngengine:bech32", version = "1.2.1" }
 authlete-http-message-signatures = { module = "com.authlete:http-message-signatures", version = "1.8" }
-springdoc-openapi-starter-webflux-ui = { module = "org.springdoc:springdoc-openapi-starter-webflux-ui", version = "3.1.1" }
+springdoc-openapi-starter-webflux-ui = { module = "org.springdoc:springdoc-openapi-starter-webflux-ui", version = "3.2.0" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 spring-boot-starter-webflux-test = { module = "org.springframework.boot:spring-boot-starter-webflux-test" }
 spring-boot-data-r2dbc-test = { module = "org.springframework.boot:spring-boot-data-r2dbc-test" }
@@ -55,9 +55,9 @@ openapitools-openapidiff-core = { module = "org.openapitools.openapidiff:openapi
 vdurmont-semver4j = { module = "com.vdurmont:semver4j", version = "3.1.0" }
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version = "1.5.1" }
 warden-makoto = { module = "at.asitplus.warden:makoto", version = "1.2.0" }
-aws-smithy-signing = { module = "aws.smithy.kotlin:aws-signing-default", version = "1.7.11" }
+aws-smithy-signing = { module = "aws.smithy.kotlin:aws-signing-default", version = "1.7.13" }
 google-auth-library-oauth2-http = { module = "com.google.auth:google-auth-library-oauth2-http", version = "1.54.0" }
-okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver3", version = "5.5.0" }
+okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver3", version = "5.5.1" }
 
 [plugins]
 cyclonedx = { id = "org.cyclonedx.bom", version.ref = "cyclonedx" }

@@ -1,14 +1,11 @@
 package de.eudiwallet.backend.shared.s3
 
-import de.eudiwallet.backend.shared.crypto.BOUNCY_CASTLE_PROVIDER
+import de.eudiwallet.backend.shared.crl.CrlCache
 import de.eudiwallet.backend.shared.crypto.x509CertificateFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.springframework.stereotype.Component
-import java.security.cert.CertPathValidator
 import java.security.cert.CertPathValidatorException
 import java.security.cert.CertificateException
-import java.security.cert.PKIXParameters
-import java.security.cert.TrustAnchor
 import java.security.cert.X509Certificate
 
 private val log = KotlinLogging.logger {}
@@ -26,6 +23,7 @@ class S3CertChainException(
 class S3CertChainProvider(
     private val s3Client: S3ObjectClient,
     private val properties: S3Properties,
+    private val crlCache: CrlCache,
 ) {
     init {
         log.info { "S3CertChainProvider using endpoint ${properties.endpoint}, bucket ${properties.bucket}" }
@@ -78,12 +76,7 @@ class S3CertChainProvider(
             throw S3CertChainException("Certificate chain $objectKey starts at the trust anchor")
         }
         try {
-            val certPath = x509CertificateFactory.generateCertPath(pathCerts)
-            val parameters =
-                PKIXParameters(setOf(TrustAnchor(trustAnchor, null))).apply {
-                    isRevocationEnabled = false
-                }
-            CertPathValidator.getInstance("PKIX", BOUNCY_CASTLE_PROVIDER).validate(certPath, parameters)
+            crlCache.validate(pathCerts, trustAnchor)
         } catch (e: CertPathValidatorException) {
             throw S3CertChainException(
                 "Certificate chain $objectKey (${pathCerts.size} certificates, topmost issuer " +

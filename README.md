@@ -60,14 +60,19 @@ Prerequisites: a JDK 25, Docker with the compose plugin, SoftHSM and Python 3.12
   `vulnerable_device_classes.json` files are placeholders without entries; the curated lists are not published. Only
   Google's attestation CRL revokes certificates in an Android key attestation chain, and no device is ever classified
   vulnerable.
+- **The MDVM admin endpoints are unauthenticated.** `/v1/mdvm/admin/*` (leaked-key management, device class revocation,
+  and their pages) authenticate no caller in the backend. Every `POST` and `DELETE`, the device class dry run included,
+  needs a JWT in `Authorization`, read unverified: its `preferred_username` claim records who made the call. A gateway
+  that logs admins in and forwards their ID token provides both.
 
 ## Contributing and issues
 
-Issue tracking and pull requests are **not** enabled on this mirror right now. Issue tracking is planned to be enabled
-in October 2026.
+Issue tracking is enabled on this mirror. Bug reports and questions about the published source are welcome as
+[GitHub issues](https://github.com/german-national-wallet/de-eudi-wallet-backend/issues). Pull requests are still
+**not** accepted. For details, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Any findings, especially security related ones are very welcome. Please find details on the bug bounty
-in [SECURITY.md](SECURITY.md).
+Security findings do not belong in issues. Report them through our bug bounty program, see
+[SECURITY.md](SECURITY.md).
 
 ## Related documentation
 

@@ -24,6 +24,7 @@ x-app-env: &app-env
 
 x-app-volumes: &app-volumes
   - ./softhsm/generated/dev-pki/roots:/etc/pki:ro
+  - ./softhsm/generated/dev-pki/crls:/etc/pki-crls:ro
 
 x-app-healthcheck: &app-healthcheck
   test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health/readiness"]

@@ -2,7 +2,8 @@
 
 A SoftHSM config whose token store lives there too (so each working copy owns its slot), the slot with every key
 generated on the token with the attribute template of the real HSM keys, and the dev PKI wrapping the key pairs' public
-keys. No key material exists outside the token store: the dev roots sign the leaves in this run only.
+keys. No key material exists outside the token store: the dev roots sign the leaves and their empty CRLs in this run
+only.
 
 usage: HSM_MODULE_LIBRARY=… HSM_SLOT_LABEL=… HSM_SLOT_PIN=… python3 softhsm/gen-keys.py
 """
@@ -10,6 +11,7 @@ usage: HSM_MODULE_LIBRARY=… HSM_SLOT_LABEL=… HSM_SLOT_PIN=… python3 sofths
 import datetime
 import hashlib
 import os
+import pathlib
 import shutil
 import subprocess
 import sys
@@ -42,6 +44,7 @@ KEY_PAIRS = {
     "tsl_wia_auth": "nw-root",
 }
 ROOTS = {"nw-root": "softhsm-nw-root", "mdvm-root": "softhsm-mdvm-attestation-root"}
+COMPOSE_CRL_DIR = "/etc/pki-crls"
 
 def common_attributes(label, key_id):
     return [
@@ -89,7 +92,7 @@ def generate_key_pair(session, stem):
     point = bytes(session.getAttributeValue(public_key, [P.CKA_EC_POINT])[0])[2:]
     return ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), point)
 
-def certificate(subject, issuer, issuer_key, public_key, serial, is_ca, now):
+def certificate(subject, issuer, issuer_key, public_key, serial, is_ca, now, crl_uris=()):
     builder = (
         x509.CertificateBuilder()
         .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, subject)]))
@@ -118,7 +121,34 @@ def certificate(subject, issuer, issuer_key, public_key, serial, is_ca, now):
             x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key.public_key()), critical=False
         )
     )
+    if crl_uris:
+        distribution_point = x509.DistributionPoint(
+            full_name=[x509.UniformResourceIdentifier(uri) for uri in crl_uris],
+            relative_name=None,
+            reasons=None,
+            crl_issuer=None,
+        )
+        builder = builder.add_extension(x509.CRLDistributionPoints([distribution_point]), critical=False)
     return builder.sign(issuer_key, hashes.SHA256())
+
+def crl(issuer, issuer_key, now):
+    return (
+        x509.CertificateRevocationListBuilder()
+        .issuer_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, issuer)]))
+        .last_update(now)
+        .next_update(now + VALIDITY)
+        .add_extension(x509.CRLNumber(1), critical=False)
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key.public_key()), critical=False
+        )
+        .sign(issuer_key, hashes.SHA256())
+    )
+
+def crl_uris(file_stem):
+    return (
+        pathlib.Path(f"{OUT}/dev-pki/crls/{file_stem}.crl").resolve().as_uri(),
+        f"file://{COMPOSE_CRL_DIR}/{file_stem}.crl",
+    )
 
 def write_pem(path, *certificates):
     with open(path, "wb") as f:
@@ -135,6 +165,7 @@ def generate(module, token_label, pin):
     )
     os.makedirs(f"{OUT}/dev-pki/roots")
     os.makedirs(f"{OUT}/dev-pki/chains")
+    os.makedirs(f"{OUT}/dev-pki/crls")
 
     lib = P.PyKCS11Lib()
     lib.load(module)
@@ -152,6 +183,8 @@ def generate(module, token_label, pin):
             key = ec.generate_private_key(ec.SECP256R1())
             cert = certificate(cn, cn, key, key.public_key(), x509.random_serial_number(), True, now)
             write_pem(f"{OUT}/dev-pki/roots/{file_stem}.pem", cert)
+            with open(f"{OUT}/dev-pki/crls/{file_stem}.crl", "wb") as f:
+                f.write(crl(cn, key, now).public_bytes(serialization.Encoding.DER))
             roots[file_stem] = (key, cert)
             print(f"generated dev root {cn}")
 
@@ -159,7 +192,9 @@ def generate(module, token_label, pin):
             stem = f"softhsm-{name}"
             public_key = generate_key_pair(session, stem)
             root_key, root_cert = roots[root]
-            leaf = certificate(stem, ROOTS[root], root_key, public_key, x509.random_serial_number(), False, now)
+            leaf = certificate(
+                stem, ROOTS[root], root_key, public_key, x509.random_serial_number(), False, now, crl_uris(root)
+            )
             write_pem(f"{OUT}/dev-pki/chains/{name}.pem", leaf, root_cert)
             print(f"generated {stem}-prvk / -pubk and its chain under {root}")
     finally:

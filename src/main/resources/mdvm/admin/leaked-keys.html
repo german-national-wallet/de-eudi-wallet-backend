@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>MDVM admin – leaked Android keys</title>
+    <link rel="stylesheet" href="admin.css">
+    <script src="admin.js" defer></script>
+    <script src="leaked-keys.js" defer></script>
+</head>
+<body>
+<header>
+    <h1><a href="./">MDVM admin</a> – leaked Android keys</h1>
+    <a href="../auth/logout">Log out</a>
+</header>
+<form id="add-form">
+    <label>Serials, hexadecimal, one per line
+        <textarea id="serials" rows="6" required></textarea>
+    </label>
+    <label>Comment (source, ticket)
+        <input type="text" id="comment" maxlength="1000">
+    </label>
+    <label>Status
+        <select id="status">
+            <option selected>REVOKED</option>
+            <option>SUSPENDED</option>
+        </select>
+    </label>
+    <label>Reason
+        <select id="reason">
+            <option selected>UNSPECIFIED</option>
+            <option>KEY_COMPROMISE</option>
+            <option>CA_COMPROMISE</option>
+            <option>SUPERSEDED</option>
+            <option>SOFTWARE_FLAW</option>
+        </select>
+    </label>
+    <p>
+        <button type="submit">Add</button>
+    </p>
+</form>
+<p id="message" class="message" role="status"></p>
+<table>
+    <thead>
+    <tr>
+        <th>Serial</th>
+        <th>Status</th>
+        <th>Reason</th>
+        <th>Comment</th>
+        <th>Added by</th>
+        <th>Created at</th>
+        <th></th>
+    </tr>
+    </thead>
+    <tbody id="entries"></tbody>
+</table>
+</body>
+</html>

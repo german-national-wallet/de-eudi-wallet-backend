@@ -10,13 +10,11 @@ import com.nimbusds.jwt.EncryptedJWT
 import com.nimbusds.jwt.JWTClaimNames.EXPIRATION_TIME
 import com.nimbusds.jwt.JWTClaimNames.ISSUED_AT
 import com.nimbusds.jwt.SignedJWT
+import de.eudiwallet.backend.shared.crl.CrlCache
 import de.eudiwallet.backend.shared.crypto.BOUNCY_CASTLE_PROVIDER
 import de.eudiwallet.backend.shared.crypto.x509CertificateFactory
 import java.security.InvalidAlgorithmParameterException
-import java.security.cert.CertPathValidator
 import java.security.cert.CertPathValidatorException
-import java.security.cert.PKIXParameters
-import java.security.cert.TrustAnchor
 import java.security.cert.X509Certificate
 import java.security.interfaces.ECPublicKey
 import java.time.Duration
@@ -85,7 +83,10 @@ fun SignedJWT.validateEcdsaSignature(verificationKey: ECPublicKey) {
     }
 }
 
-fun SignedJWT.validateCertificateChain(pinnedCertificate: X509Certificate): X509Certificate {
+fun SignedJWT.validateCertificateChain(
+    pinnedCertificate: X509Certificate,
+    crlCache: CrlCache,
+): X509Certificate {
     val certificates = validatedCertificates()
     val anchorIndex =
         certificates.indexOfFirst {
@@ -96,11 +97,7 @@ fun SignedJWT.validateCertificateChain(pinnedCertificate: X509Certificate): X509
     }
     val chainToValidate = if (anchorIndex > 0) certificates.take(anchorIndex) else certificates
     try {
-        val trustAnchors = setOf(TrustAnchor(pinnedCertificate, null))
-        val pkixParameters = PKIXParameters(trustAnchors).apply { isRevocationEnabled = false }
-        val certPath = x509CertificateFactory.generateCertPath(chainToValidate)
-        val pkixCertPathValidator = CertPathValidator.getInstance("PKIX", BOUNCY_CASTLE_PROVIDER)
-        pkixCertPathValidator.validate(certPath, pkixParameters)
+        crlCache.validate(chainToValidate, pinnedCertificate)
     } catch (ex: CertPathValidatorException) {
         throw JwtException.CertificateFailure(jwtType, cause = ex)
     } catch (ex: InvalidAlgorithmParameterException) {

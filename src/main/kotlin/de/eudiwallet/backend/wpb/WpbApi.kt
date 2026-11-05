@@ -21,6 +21,8 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.springframework.beans.factory.ObjectProvider
@@ -142,6 +144,7 @@ class WpbApi(
     private val httpSignatureVerifier: HttpSignatureVerifier,
     private val telemetryService: TelemetryService,
     private val revocationPublisherProvider: ObjectProvider<WalletInstanceRevocationPublisher>,
+    private val ioDispatcher: CoroutineDispatcher,
 ) {
     @Operation(
         summary = "Generate a challenge for wallet provider backend operations",
@@ -265,7 +268,7 @@ class WpbApi(
     ): MdvmToken {
         challengeTokenBuilder.parseAndValidate(wpbAuthChallenge, config.issuer)
 
-        val parsedMdvmToken = mdvmTokenParser.parseAndValidate(mdvmToken)
+        val parsedMdvmToken = withContext(ioDispatcher) { mdvmTokenParser.parseAndValidate(mdvmToken) }
 
         httpSignatureVerifier.verifyRequestSignature(
             httpRequest,

@@ -7,6 +7,7 @@ hsm:
   pool-size: 1
 
 rwsca:
+  pin-encryption-key: '{"kty":"EC","crv":"P-256","x":"aRGLjHi7Yh0JZPHVRm89WE8Q4M1aeITfgsSfLXRVoas","y":"ftQKT5FIi3mZVXYHezF74itk7nlbsCj1FO45M_d-egA","d":"7ZU3u65IvRNhm-QkHMjoiC9meXjsRTmLj-rJoFqQef8"}'
   wi-slot:
     label: ${hsm.slot-label}
     pin: ${hsm.slot-pin}

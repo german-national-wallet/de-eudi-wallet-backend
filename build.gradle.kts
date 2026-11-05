@@ -30,6 +30,10 @@ repositories {
     mavenCentral()
 }
 
+if (file("rasp/rasp.gradle.kts").exists()) {
+    apply(from = "rasp/rasp.gradle.kts")
+}
+
 extra["kotlin-coroutines.version"] = "1.11.0"
 
 dependencyManagement {
@@ -130,6 +134,7 @@ tasks.withType<Test> {
     System.getProperties().stringPropertyNames()
         .filter { it.startsWith("kotest.") }
         .forEach { systemProperty(it, System.getProperty(it)) }
+    systemProperty("otel.instrumentation.common.v3-preview", "true")
     systemProperty("releaseVersion", providers.gradleProperty("releaseVersion").getOrElse(""))
     testLogging {
         events("failed")

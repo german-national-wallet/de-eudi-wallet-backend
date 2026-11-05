@@ -26,8 +26,14 @@ class MdvmConfiguration(
     val tokenExpireAfter: Duration = Duration.ofHours(1),
     val saveAnalytics: Boolean = false,
     val traceDebugInfo: Boolean = false,
+    val raspKeys: List<RaspKey> = emptyList(),
 ) {
     val mdvmRootCert: X509Certificate = readX509Cert(mdvmRootCertPath).apply { checkValidity() }
+
+    class RaspKey(
+        val id: String,
+        val secret: String,
+    )
 }
 
 @Configuration
