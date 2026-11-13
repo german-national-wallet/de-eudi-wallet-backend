@@ -42,11 +42,7 @@ class KeyRolloverMetrics(
         key: HsmKey,
         expiryDate: LocalDate,
     ) {
-        if (expiryDate != LocalDate.MAX) {
-            primaryKeyExpiryByLineage[lineage] = DatedKey(key.keyId, key.label, expiryDate)
-        } else {
-            primaryKeyExpiryByLineage.remove(lineage)
-        }
+        primaryKeyExpiryByLineage[lineage] = DatedKey(key.keyId, key.label, expiryDate)
     }
 
     fun setNextKey(

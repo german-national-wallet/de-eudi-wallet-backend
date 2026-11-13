@@ -55,4 +55,8 @@ sealed class HsmException(
     class DecryptionFailedException(
         cause: Throwable,
     ) : HsmException("HSM decryption failed", cause)
+
+    class TagMismatchException(
+        cause: Throwable,
+    ) : HsmException("HSM decryption failed: GCM tag mismatch (ciphertext, IV, AAD or key changed)", cause)
 }

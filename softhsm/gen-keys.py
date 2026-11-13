@@ -26,10 +26,12 @@ OUT = "softhsm/generated"
 P256_OID_DER = bytes.fromhex("06082a8648ce3d030107")
 USAGES = [P.CKA_ENCRYPT, P.CKA_DECRYPT, P.CKA_SIGN, P.CKA_VERIFY, P.CKA_WRAP, P.CKA_UNWRAP]
 VALIDITY = datetime.timedelta(days=5475)
+TODAY = datetime.date.today()
 
 SECRET_KEYS = {
     "rwscd_master_key": (P.CKK_AES, P.CKM_AES_KEY_GEN, {P.CKA_WRAP, P.CKA_UNWRAP}),
     "rwscd_aead_symk": (P.CKK_AES, P.CKM_AES_KEY_GEN, {P.CKA_ENCRYPT, P.CKA_DECRYPT}),
+    "rwscd_account_aead_symk": (P.CKK_AES, P.CKM_AES_KEY_GEN, {P.CKA_ENCRYPT, P.CKA_DECRYPT}),
     "rwscd_challenge_symk": (P.CKK_GENERIC_SECRET, P.CKM_GENERIC_SECRET_KEY_GEN, {P.CKA_SIGN, P.CKA_VERIFY}),
     "rwscd_pin_symk": (P.CKK_GENERIC_SECRET, P.CKM_GENERIC_SECRET_KEY_GEN, {P.CKA_SIGN, P.CKA_VERIFY}),
     "mdvm_challenge_symk": (P.CKK_GENERIC_SECRET, P.CKM_GENERIC_SECRET_KEY_GEN, {P.CKA_SIGN, P.CKA_VERIFY}),
@@ -54,6 +56,8 @@ def common_attributes(label, key_id):
         (P.CKA_PRIVATE, False),
         (P.CKA_MODIFIABLE, False),
         (P.CKA_DERIVE, False),
+        (P.CKA_START_DATE, (TODAY - datetime.timedelta(days=1)).strftime("%Y%m%d").encode()),
+        (P.CKA_END_DATE, (TODAY + VALIDITY).strftime("%Y%m%d").encode()),
     ]
 
 def generate_secret_key(session, name, key_type, mechanism, usages):

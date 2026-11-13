@@ -60,7 +60,9 @@ internal object Ck {
     const val CKR_SIGNATURE_LEN_RANGE = 0xc1L
     const val CKR_ATTRIBUTE_SENSITIVE = 0x11L
     const val CKR_ATTRIBUTE_TYPE_INVALID = 0x12L
+    const val CKR_GENERAL_ERROR = 0x5L
     const val CKR_DEVICE_ERROR = 0x30L
+    const val CKR_ENCRYPTED_DATA_INVALID = 0x40L
     const val CKR_SESSION_HANDLE_INVALID = 0xb3L
     const val CKR_OBJECT_HANDLE_INVALID = 0x82L
     const val CKR_USER_ALREADY_LOGGED_IN = 0x100L

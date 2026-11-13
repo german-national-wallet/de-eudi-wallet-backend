@@ -32,6 +32,7 @@ class RwscaConfiguration(
     val rwscdWteAuthKeyPrefix: String,
     val rwscdPinSymkPrefix: String,
     val rwscdAeadSymkPrefix: String,
+    val rwscdAccountAeadSymkPrefix: String,
     val rwscdWteRootCertPath: Resource,
     val wiSlot: SlotConfig,
     val pinEncryptionKey: String,
@@ -117,6 +118,18 @@ class RwscaKeyProvider(
             keyRolloverMetrics,
         ).also { it.initialize() }
 
+    @Bean("rwscdAccountAeadSymLineage")
+    @Profile("!build-docs")
+    fun rwscdAccountAeadSymLineage(): SymmetricKeyLineage<HsmKeyRef.AesKeyRef> =
+        SymmetricKeyLineage(
+            "rwscd-account-aead-symk",
+            config.rwscdAccountAeadSymkPrefix,
+            HsmKeyClass.AesGcm,
+            hsmProvider,
+            ioDispatcher,
+            keyRolloverMetrics,
+        ).also { it.initialize() }
+
     @Bean
     fun pinEncryptionKey(): PinEncryptionKey = PinEncryptionKey(config.pinEncryptionKey)
 
@@ -135,4 +148,8 @@ class RwscaKeyProvider(
     @Bean("rwscdAeadSymLineage")
     @Profile("build-docs")
     fun docsRwscdAeadSymKeySource(): KeySource<SymmetricKeySet> = stubSymKeySource()
+
+    @Bean("rwscdAccountAeadSymLineage")
+    @Profile("build-docs")
+    fun docsRwscdAccountAeadSymKeySource(): KeySource<SymmetricKeySet> = stubSymKeySource()
 }

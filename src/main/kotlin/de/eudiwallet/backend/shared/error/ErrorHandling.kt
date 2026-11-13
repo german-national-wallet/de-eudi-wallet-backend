@@ -14,12 +14,16 @@ import kotlinx.serialization.KSerializer
 import org.springframework.dao.DataAccessException
 import org.springframework.dao.DataAccessResourceFailureException
 import org.springframework.dao.TransientDataAccessException
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.HttpStatusCode
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.security.web.server.firewall.ServerExchangeRejectedException
 import org.springframework.validation.BindingResult
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.server.ServerWebInputException
 
 const val TRACE_ID = "trace_id"
@@ -45,12 +49,15 @@ enum class CommonError {
 fun <R : Any> TelemetryService.errorResponseEntity(
     code: ErrorResponseCode,
     cause: Throwable,
+    status: HttpStatusCode = code.httpStatus,
+    headers: HttpHeaders = HttpHeaders.EMPTY,
     body: (traceId: String?) -> R,
 ): ResponseEntity<R> {
     traceErrorCode(code.name)
     traceException(cause)
     return ResponseEntity
-        .status(code.httpStatus)
+        .status(status)
+        .headers(headers)
         .contentType(MediaType.APPLICATION_JSON)
         .body(body(getCurrentTraceId()))
 }
@@ -58,6 +65,8 @@ fun <R : Any> TelemetryService.errorResponseEntity(
 @Suppress("TooManyFunctions")
 abstract class ServiceErrorHandler<C : ErrorResponseCode, R : Any>(
     private val telemetryService: TelemetryService,
+    private val errorMetrics: ErrorMetrics,
+    private val module: String,
     codes: List<C>,
     private val bodySerializer: KSerializer<R>,
 ) {
@@ -70,6 +79,10 @@ abstract class ServiceErrorHandler<C : ErrorResponseCode, R : Any>(
 
     private val internalServerError =
         checkNotNull(commonCodes[CommonError.INTERNAL_SERVER_ERROR]) { "Error codes lack INTERNAL_SERVER_ERROR" }
+
+    init {
+        errorMetrics.register(module, codes)
+    }
 
     protected abstract fun errorBody(
         code: C,
@@ -118,7 +131,11 @@ abstract class ServiceErrorHandler<C : ErrorResponseCode, R : Any>(
         return commonErrorResponse(CommonError.MDVM_TOKEN_VERIFICATION_FAILURE, e)
     }
 
-    @ExceptionHandler(ServerWebInputException::class, MethodArgumentNotValidException::class)
+    @ExceptionHandler(
+        ServerWebInputException::class,
+        MethodArgumentNotValidException::class,
+        ServerExchangeRejectedException::class,
+    )
     fun handleBadRequest(e: Exception): ResponseEntity<String> {
         val description =
             (e as? BindingResult)
@@ -130,6 +147,14 @@ abstract class ServiceErrorHandler<C : ErrorResponseCode, R : Any>(
         return commonErrorResponse(CommonError.BAD_REQUEST, e, description)
     }
 
+    @ExceptionHandler(ResponseStatusException::class)
+    fun handleResponseStatus(e: ResponseStatusException): ResponseEntity<String> =
+        if (e.statusCode.is4xxClientError) {
+            commonErrorResponse(CommonError.BAD_REQUEST, e, status = e.statusCode, headers = e.headers)
+        } else {
+            errorResponse(internalServerError, e)
+        }
+
     @ExceptionHandler(Exception::class)
     fun handleInternalServerError(e: Exception) = errorResponse(internalServerError, e)
 
@@ -137,15 +162,20 @@ abstract class ServiceErrorHandler<C : ErrorResponseCode, R : Any>(
         code: C,
         cause: Throwable,
         description: String? = null,
-    ) = errorResponse(code, cause) { traceId -> errorBody(code, description, traceId) }
+        status: HttpStatusCode = code.httpStatus,
+        headers: HttpHeaders = HttpHeaders.EMPTY,
+    ) = errorResponse(code, cause, status, headers) { traceId -> errorBody(code, description, traceId) }
 
     protected fun errorResponse(
         code: C,
         cause: Throwable,
+        status: HttpStatusCode = code.httpStatus,
+        headers: HttpHeaders = HttpHeaders.EMPTY,
         body: (traceId: String?) -> R,
     ): ResponseEntity<String> {
-        if (code.httpStatus.is5xxServerError) log.error(cause) {}
-        return telemetryService.errorResponseEntity(code, cause) { traceId ->
+        if (status.is5xxServerError) log.error(cause) {}
+        errorMetrics.countError(module, code, status)
+        return telemetryService.errorResponseEntity(code, cause, status, headers) { traceId ->
             kotlinJson.encodeToString(bodySerializer, body(traceId))
         }
     }
@@ -154,5 +184,10 @@ abstract class ServiceErrorHandler<C : ErrorResponseCode, R : Any>(
         error: CommonError,
         cause: Throwable,
         description: String? = null,
-    ) = errorResponse(commonCodes[error] ?: internalServerError, cause, description)
+        status: HttpStatusCode? = null,
+        headers: HttpHeaders = HttpHeaders.EMPTY,
+    ): ResponseEntity<String> {
+        val code = commonCodes[error] ?: return errorResponse(internalServerError, cause, description)
+        return errorResponse(code, cause, description, status ?: code.httpStatus, headers)
+    }
 }

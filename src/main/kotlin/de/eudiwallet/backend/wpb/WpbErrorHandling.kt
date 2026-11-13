@@ -1,5 +1,6 @@
 package de.eudiwallet.backend.wpb
 
+import de.eudiwallet.backend.shared.error.ErrorMetrics
 import de.eudiwallet.backend.shared.error.ErrorResponseCode
 import de.eudiwallet.backend.shared.error.ServiceErrorHandler
 import de.eudiwallet.backend.shared.error.TRACE_ID
@@ -39,8 +40,11 @@ class RevocationCodeNotFoundException(
 @ConditionalOnProperty(prefix = "wpb", name = ["enabled"], havingValue = "true")
 class WpbErrorHandler(
     telemetryService: TelemetryService,
+    errorMetrics: ErrorMetrics,
 ) : ServiceErrorHandler<WpbErrorResponseCode, WpbErrorResponse>(
         telemetryService,
+        errorMetrics,
+        "wpb",
         WpbErrorResponseCode.entries,
         WpbErrorResponse.serializer(),
     ) {

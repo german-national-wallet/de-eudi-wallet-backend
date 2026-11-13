@@ -1,5 +1,8 @@
 package de.eudiwallet.backend.mdvm
 
+const val RASP_KEY_ID = "mdvm.rasp.key_id"
+const val RASP_STATUS = "mdvm.rasp.status"
+
 abstract class RaspException(
     explanation: String,
 ) : MdvmException(explanation) {
@@ -8,7 +11,7 @@ abstract class RaspException(
     ) : RaspException("Unknown RASP key id") {
         override val internalErrorCode = InternalErrorCode.RASP_UNKNOWN_KEY
 
-        override fun diagnosticDetails() = mapOf(MDVM_ERROR_KEY to "UnknownKey", "mdvm.rasp_key_id" to keyId)
+        override fun diagnosticDetails() = mapOf(MDVM_ERROR_KEY to "UnknownKey", RASP_KEY_ID to keyId)
     }
 
     class InvalidResponse : RaspException("RASP response cannot be parsed") {
@@ -26,7 +29,7 @@ abstract class RaspException(
         override fun diagnosticDetails() =
             mapOf(
                 MDVM_ERROR_KEY to "UnacceptedRaspResponse",
-                "mdvm.rasp.status" to status,
+                RASP_STATUS to status,
             ) + diagnostic.mapKeys { "mdvm.rasp.${it.key}" }
     }
 

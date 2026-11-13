@@ -3,6 +3,7 @@ hsm:
   slot-label: TEST_SLOT
   slot-pin: 1234
   wrapping-mechanism: CKM_AES_KEY_WRAP_PAD
+  general-error-is-tag-mismatch: true
   key-prefix: softhsm
   pool-size: 1
 

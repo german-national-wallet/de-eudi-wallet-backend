@@ -1,5 +1,6 @@
 package de.eudiwallet.backend.statuslist
 
+import de.eudiwallet.backend.shared.error.ErrorMetrics
 import de.eudiwallet.backend.shared.error.ErrorResponseCode
 import de.eudiwallet.backend.shared.error.TRACE_ID
 import de.eudiwallet.backend.shared.error.errorResponseEntity
@@ -20,8 +21,13 @@ import java.time.Instant
 @ConditionalOnProperty(prefix = "statuslist", name = ["enabled"], havingValue = "true")
 class StatusListErrorHandler(
     private val telemetryService: TelemetryService,
+    private val errorMetrics: ErrorMetrics,
 ) {
     private val log = KotlinLogging.logger {}
+
+    init {
+        errorMetrics.register("statuslist", StatusListErrorResponseCode.entries)
+    }
 
     @ExceptionHandler(NoSuchListException::class)
     fun handleNoSuchList(e: NoSuchListException) =
@@ -50,8 +56,11 @@ class StatusListErrorHandler(
     private fun createErrorResponseEntity(
         code: StatusListErrorResponseCode,
         cause: Throwable,
-    ) = telemetryService.errorResponseEntity(code, cause) { traceId ->
-        StatusListErrorResponse(code = code, traceId = traceId)
+    ): ResponseEntity<StatusListErrorResponse> {
+        errorMetrics.countError("statuslist", code)
+        return telemetryService.errorResponseEntity(code, cause) { traceId ->
+            StatusListErrorResponse(code = code, traceId = traceId)
+        }
     }
 }
 

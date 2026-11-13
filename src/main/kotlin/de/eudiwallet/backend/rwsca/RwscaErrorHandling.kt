@@ -1,10 +1,13 @@
 package de.eudiwallet.backend.rwsca
 
+import de.eudiwallet.backend.shared.error.ErrorMetrics
 import de.eudiwallet.backend.shared.error.ErrorResponseCode
 import de.eudiwallet.backend.shared.error.ServiceErrorHandler
 import de.eudiwallet.backend.shared.error.TRACE_ID
 import de.eudiwallet.backend.shared.hsm.HsmException
+import de.eudiwallet.backend.shared.hsm.HsmKeyId
 import de.eudiwallet.backend.shared.telemetry.TelemetryService
+import io.github.oshai.kotlinlogging.KMarkerFactory
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.swagger.v3.oas.annotations.media.Schema
 import kotlinx.serialization.SerialName
@@ -32,6 +35,20 @@ class PinAlreadyInitializedException : RuntimeException("Pin already initialized
 
 class AccountLockedException : RuntimeException("Account locked")
 
+class AccountIntegrityException(
+    rwscaAccountId: RwscaAccountId,
+    keyId: HsmKeyId,
+    cause: Throwable? = null,
+) : RuntimeException(
+        "PIN public key of account $rwscaAccountId under key ${keyId.value} failed its integrity check",
+        cause,
+    )
+
+class AccountExpiredException(
+    rwscaAccountId: RwscaAccountId,
+    keyId: HsmKeyId,
+) : RuntimeException("PIN public key of account $rwscaAccountId is under key ${keyId.value}, no longer valid")
+
 class PinNotInitializedException : RuntimeException("Pin not initialized")
 
 class PinVerificationFailedException(
@@ -56,13 +73,19 @@ class MalformedDataHashException(
     cause: Throwable,
 ) : RuntimeException("Malformed $WI_KEY_BINDING_DATA_HASH_FIELD", cause)
 
+private val SECURITY_MARKER = KMarkerFactory.getMarker("SECURITY")
+private val OPERATIONS_MARKER = KMarkerFactory.getMarker("OPERATIONS")
+
 @Suppress("TooManyFunctions")
 @ControllerAdvice(basePackages = ["de.eudiwallet.backend.rwsca"])
 @ConditionalOnProperty(prefix = "rwsca", name = ["enabled"], havingValue = "true")
 class RwscaErrorHandler(
     telemetryService: TelemetryService,
+    errorMetrics: ErrorMetrics,
 ) : ServiceErrorHandler<RwscaErrorResponseCode, RwscaErrorResponse>(
         telemetryService,
+        errorMetrics,
+        "rwsca",
         RwscaErrorResponseCode.entries,
         RwscaErrorResponse.serializer(),
     ) {
@@ -97,6 +120,21 @@ class RwscaErrorHandler(
 
     @ExceptionHandler(AccountLockedException::class)
     fun handleAccountLocked(e: AccountLockedException) = errorResponse(RwscaErrorResponseCode.ACCOUNT_LOCKED, e)
+
+    @ExceptionHandler(AccountIntegrityException::class)
+    fun handleAccountIntegrity(e: AccountIntegrityException): ResponseEntity<String> {
+        log.atError(SECURITY_MARKER) {
+            message = e.message
+            cause = e.cause
+        }
+        return errorResponse(RwscaErrorResponseCode.ACCOUNT_INTEGRITY_FAILURE, e)
+    }
+
+    @ExceptionHandler(AccountExpiredException::class)
+    fun handleAccountExpired(e: AccountExpiredException): ResponseEntity<String> {
+        log.atError(OPERATIONS_MARKER) { message = e.message }
+        return errorResponse(RwscaErrorResponseCode.ACCOUNT_EXPIRED, e)
+    }
 
     @ExceptionHandler(MalformedPinPubKeyException::class)
     fun handleMalformedKey(e: MalformedPinPubKeyException) =
@@ -152,6 +190,8 @@ enum class RwscaErrorResponseCode(
     KEY_ALREADY_REGISTERED(HttpStatus.CONFLICT, "An account is already registered for this MDVM account"),
     PIN_ALREADY_INITIALIZED(HttpStatus.CONFLICT, "Pin already initialized"),
     ACCOUNT_LOCKED(HttpStatus.FORBIDDEN, "Account locked"),
+    ACCOUNT_INTEGRITY_FAILURE(HttpStatus.FORBIDDEN, "Account record failed its integrity check"),
+    ACCOUNT_EXPIRED(HttpStatus.FORBIDDEN, "Account record is under a key that is no longer valid"),
     MALFORMED_PIN_PUB_KEY(HttpStatus.BAD_REQUEST, "Malformed $WI_RWSCA_PIN_PUBK_FIELD"),
     MALFORMED_DATA_HASH(HttpStatus.BAD_REQUEST, "Malformed $WI_KEY_BINDING_DATA_HASH_FIELD"),
     PIN_NOT_INITIALIZED(HttpStatus.CONFLICT, "Pin not initialized"),

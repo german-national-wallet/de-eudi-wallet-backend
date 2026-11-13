@@ -228,6 +228,7 @@ class RwscaApi(
     private val rwscaBoundWrappedPrvkBuilder: RwscaBoundWrappedPrvkBuilder,
     private val wteBuilder: WalletTrustEvidenceBuilder,
     private val challengeTokenBuilder: ChallengeTokenBuilder,
+    private val rwscaMetrics: RwscaMetrics,
     private val ioDispatcher: CoroutineDispatcher,
 ) {
     @Operation(
@@ -334,13 +335,13 @@ class RwscaApi(
                     REQUIRED_SIGNATURE_START_SESSION_COMPONENTS,
                 ).authKey
 
-            rwscaAccountService.verifyPin(rwscaAccountId, wiMdvmAuthPubk) { account ->
+            rwscaAccountService.verifyPin(rwscaAccountId, wiMdvmAuthPubk) { pinPubk ->
                 try {
                     httpSignatureVerifier.verifyRequestSignature(
                         httpRequest,
                         RWSCA_PIN_SIGNATURE_NAME,
                         REQUIRED_SIGNATURE_START_SESSION_COMPONENTS,
-                        account.pinPubKey,
+                        pinPubk,
                     )
                     true
                 } catch (_: SignatureVerificationException.WrongSignature) {
@@ -390,6 +391,7 @@ class RwscaApi(
                         async {
                             hsmProvider.use("Create and wrap RWSCA key pair") { hsm ->
                                 val (publicKey, wrappedPrivateKey) = hsm.createWrappedKeyPair(masterKeyId)
+                                rwscaMetrics.countKeyCreated()
                                 val rwscaBoundWrappedKey =
                                     rwscaBoundWrappedPrvkBuilder.create(
                                         account.rwscaAccountId,

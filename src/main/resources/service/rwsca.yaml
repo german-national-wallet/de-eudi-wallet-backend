@@ -5,4 +5,5 @@ rwsca:
   rwscd-wte-auth-key-prefix: ${hsm.key-prefix}-rwscd_wte_auth
   rwscd-pin-symk-prefix: ${hsm.key-prefix}-rwscd_pin_symk
   rwscd-aead-symk-prefix: ${hsm.key-prefix}-rwscd_aead_symk
+  rwscd-account-aead-symk-prefix: ${hsm.key-prefix}-rwscd_account_aead_symk
   rwscd-wte-root-cert-path: ${pki.nw-root-cert-path}

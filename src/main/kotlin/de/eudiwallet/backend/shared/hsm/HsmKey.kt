@@ -2,9 +2,12 @@ package de.eudiwallet.backend.shared.hsm
 
 import de.eudiwallet.backend.shared.hsm.pkcs11.AttributeValues
 import de.eudiwallet.backend.shared.hsm.pkcs11.Ck
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Instant
 import java.time.LocalDate
 import java.util.TimeZone
+
+private val log = KotlinLogging.logger {}
 
 const val HSM_PRIVATE_KEY_LABEL_SUFFIX = "-prvk"
 
@@ -30,12 +33,16 @@ data class HsmKey(
     companion object {
         internal fun from(attributes: AttributeValues): HsmKey? {
             val id = attributes.bytes(Ck.CKA_ID)?.takeIf { it.isNotEmpty() } ?: return null
-            return HsmKey(
-                HsmKeyId.from(id),
-                attributes.string(Ck.CKA_LABEL).orEmpty(),
-                attributes.date(Ck.CKA_START_DATE) ?: LocalDate.MIN,
-                attributes.date(Ck.CKA_END_DATE) ?: LocalDate.MAX,
-            )
+            val keyId = HsmKeyId.from(id)
+            val label = attributes.string(Ck.CKA_LABEL).orEmpty()
+            val startDate = attributes.date(Ck.CKA_START_DATE)
+            val endDate = attributes.date(Ck.CKA_END_DATE)
+            return if (startDate != null && endDate != null && !endDate.isBefore(startDate)) {
+                HsmKey(keyId, label, startDate, endDate)
+            } else {
+                log.warn { "Key $label (${keyId.value}) ignored: no valid window from $startDate to $endDate" }
+                null
+            }
         }
     }
 }

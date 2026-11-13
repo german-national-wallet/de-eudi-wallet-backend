@@ -20,6 +20,7 @@ class HsmConfiguration(
     val wrappingMechanism: WrappingMechanism = WrappingMechanism.THALES_AES_KWP,
     val poolSize: Int = 10,
     val poolBorrowTimeout: Duration = Duration.ofSeconds(10),
+    val generalErrorIsTagMismatch: Boolean = false,
 ) {
     val defaultSlot: SlotConfig get() = SlotConfig(slotLabel, slotPin, poolSize)
 }

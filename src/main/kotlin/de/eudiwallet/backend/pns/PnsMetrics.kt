@@ -25,6 +25,12 @@ class PnsMetrics(
             "Push notifications handled by PNS, by delivery outcome",
         ).build()
 
-    fun countPushNotification(outcome: PushMetricOutcome) =
-        deliveryCounter.add(1, Attributes.of(stringKey("outcome"), outcome.name.lowercase()))
+    init {
+        PushMetricOutcome.entries.forEach { deliveryCounter.add(0, outcomeAttributes(it)) }
+    }
+
+    fun countPushNotification(outcome: PushMetricOutcome) = deliveryCounter.add(1, outcomeAttributes(outcome))
+
+    private fun outcomeAttributes(outcome: PushMetricOutcome) =
+        Attributes.of(stringKey("outcome"), outcome.name.lowercase())
 }

@@ -7,7 +7,6 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import java.security.interfaces.ECPublicKey
 import java.time.Instant
 import java.util.UUID
 
@@ -42,7 +41,6 @@ sealed class RwscaAccount(
 
     data class WithPin(
         override val rwscaAccountId: RwscaAccountId,
-        val pinPubKey: ECPublicKey,
         val pinTryCounter: Int,
         val pinTryFailedAt: Instant?,
     ) : RwscaAccount(rwscaAccountId)

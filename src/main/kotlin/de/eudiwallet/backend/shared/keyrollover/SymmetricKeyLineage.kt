@@ -95,6 +95,6 @@ class SymmetricKeyLineage<T : HsmKeyRef>(
 
 fun stubSymKeySource(): KeySource<SymmetricKeySet> =
     KeySource {
-        val stubKey = HsmKey(HsmKeyId(STUB), STUB, LocalDate.MIN, LocalDate.MAX)
+        val stubKey = HsmKey(HsmKeyId(STUB), STUB, LocalDate.MIN, LocalDate.of(9999, 12, 31))
         SymmetricKeySet(listOf(stubKey), stubKey)
     }

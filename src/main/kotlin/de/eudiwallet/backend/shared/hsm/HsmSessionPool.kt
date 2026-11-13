@@ -154,6 +154,7 @@ class HsmSessionPool(
             borrowTimeout: Duration,
             telemetryService: TelemetryService,
             hsmMetrics: HsmMetrics,
+            generalErrorIsTagMismatch: Boolean,
         ): HsmSessionPool =
             pools.computeIfAbsent(slot.label) {
                 create(
@@ -163,6 +164,7 @@ class HsmSessionPool(
                     borrowTimeout,
                     telemetryService,
                     hsmMetrics,
+                    generalErrorIsTagMismatch,
                 )
             }
 
@@ -173,6 +175,7 @@ class HsmSessionPool(
             borrowTimeout: Duration,
             telemetryService: TelemetryService,
             hsmMetrics: HsmMetrics,
+            generalErrorIsTagMismatch: Boolean,
         ): HsmSessionPool {
             val pkcs11: Pkcs11
             val sessions: List<Long> =
@@ -209,6 +212,7 @@ class HsmSessionPool(
                         slot.label,
                         hsmMetrics,
                         telemetryService,
+                        generalErrorIsTagMismatch,
                         onRelease = { hsmSession -> pool.release(hsmSession) },
                     )
                 }

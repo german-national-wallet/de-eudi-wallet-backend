@@ -73,7 +73,7 @@ server:
 deployment:
   environment:
 
-api-contract-version: 16.4.0
+api-contract-version: 16.5.0
 
 info:
   application:

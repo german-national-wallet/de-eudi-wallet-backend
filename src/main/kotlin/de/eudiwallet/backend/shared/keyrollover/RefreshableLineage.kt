@@ -26,8 +26,6 @@ class ExpiredKeyException(
 
 private val hsmDateZone: ZoneId get() = ZoneId.systemDefault()
 
-internal fun HsmKey.expiresAt(): Instant =
-    if (endDate == LocalDate.MAX) Instant.MAX else endDate.plusDays(1).atStartOfDay(hsmDateZone).toInstant()
+internal fun HsmKey.expiresAt(): Instant = endDate.plusDays(1).atStartOfDay(hsmDateZone).toInstant()
 
-internal fun Instant.lastUsableDay(): LocalDate =
-    if (this == Instant.MAX) LocalDate.MAX else minusNanos(1).atZone(hsmDateZone).toLocalDate()
+internal fun Instant.lastUsableDay(): LocalDate = minusNanos(1).atZone(hsmDateZone).toLocalDate()

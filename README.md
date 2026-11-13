@@ -60,10 +60,10 @@ Prerequisites: a JDK 25, Docker with the compose plugin, SoftHSM and Python 3.12
   `vulnerable_device_classes.json` files are placeholders without entries; the curated lists are not published. Only
   Google's attestation CRL revokes certificates in an Android key attestation chain, and no device is ever classified
   vulnerable.
-- **The MDVM admin endpoints are unauthenticated.** `/v1/mdvm/admin/*` (leaked-key management, device class revocation,
-  and their pages) authenticate no caller in the backend. Every `POST` and `DELETE`, the device class dry run included,
-  needs a JWT in `Authorization`, read unverified: its `preferred_username` claim records who made the call. A gateway
-  that logs admins in and forwards their ID token provides both.
+- **The MDVM admin endpoints are unauthenticated.** `/v1/mdvm/admin/*` (leaked-key management, device class
+  revocation, and their pages) authenticate no caller in the backend. Every `POST` and `DELETE`, the device class dry
+  run included, needs a JWT in `Authorization`, read unverified: its `preferred_username` claim records who made the
+  call. A gateway that logs admins in and forwards their ID token provides both.
 
 ## Contributing and issues
 

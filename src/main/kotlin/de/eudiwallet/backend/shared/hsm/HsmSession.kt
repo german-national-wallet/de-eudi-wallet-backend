@@ -35,7 +35,7 @@ data class WrappedKeyPair(
 const val AES_TAG_BITS = 128L
 const val AES_TAG_BYTES = AES_TAG_BITS.toInt() / 8
 
-const val IV_BYTES = 16
+const val IV_BYTES = 12
 
 private val SCAN_ATTRIBUTES = longArrayOf(Ck.CKA_ID, Ck.CKA_LABEL, Ck.CKA_START_DATE, Ck.CKA_END_DATE)
 
@@ -77,6 +77,7 @@ class HsmSession internal constructor(
     private val slotLabel: String,
     private val hsmMetrics: HsmMetrics,
     private val telemetryService: TelemetryService,
+    private val generalErrorIsTagMismatch: Boolean = false,
     private val onRelease: (HsmSession) -> Unit,
 ) {
     private val log = KotlinLogging.logger {}
@@ -328,6 +329,9 @@ class HsmSession internal constructor(
                 )
             }
         } catch (e: Pkcs11Exception) {
+            val tagMismatch =
+                e.rv == Ck.CKR_ENCRYPTED_DATA_INVALID || (generalErrorIsTagMismatch && e.rv == Ck.CKR_GENERAL_ERROR)
+            if (tagMismatch) throw HsmException.TagMismatchException(e)
             throw HsmException.DecryptionFailedException(e)
         }
 

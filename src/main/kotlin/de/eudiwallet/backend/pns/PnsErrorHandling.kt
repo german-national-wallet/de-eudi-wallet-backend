@@ -1,5 +1,6 @@
 package de.eudiwallet.backend.pns
 
+import de.eudiwallet.backend.shared.error.ErrorMetrics
 import de.eudiwallet.backend.shared.error.ErrorResponseCode
 import de.eudiwallet.backend.shared.error.ServiceErrorHandler
 import de.eudiwallet.backend.shared.error.TRACE_ID
@@ -16,8 +17,11 @@ import java.time.Instant
 @ConditionalOnProperty(prefix = "pns", name = ["enabled"], havingValue = "true")
 class PnsErrorHandler(
     telemetryService: TelemetryService,
+    errorMetrics: ErrorMetrics,
 ) : ServiceErrorHandler<PnsErrorResponseCode, PnsErrorResponse>(
         telemetryService,
+        errorMetrics,
+        "pns",
         PnsErrorResponseCode.entries,
         PnsErrorResponse.serializer(),
     ) {

@@ -59,6 +59,7 @@ class HsmModule(
                 config.poolBorrowTimeout,
                 telemetryService,
                 hsmMetrics,
+                config.generalErrorIsTagMismatch,
             ),
         )
 }

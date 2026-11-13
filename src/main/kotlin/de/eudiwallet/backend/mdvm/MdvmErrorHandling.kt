@@ -13,6 +13,7 @@ import at.asitplus.attestation.android.exceptions.AttestationValueException
 import at.asitplus.attestation.android.exceptions.CertificateInvalidException
 import at.asitplus.attestation.android.exceptions.RevocationException
 import de.eudiwallet.backend.shared.crypto.jwkThumbprint
+import de.eudiwallet.backend.shared.error.ErrorMetrics
 import de.eudiwallet.backend.shared.error.ErrorResponseCode
 import de.eudiwallet.backend.shared.error.ServiceErrorHandler
 import de.eudiwallet.backend.shared.error.TRACE_ID
@@ -557,8 +558,11 @@ abstract class IosKeyAttestationException(
 @ConditionalOnProperty(prefix = "mdvm", name = ["enabled"], havingValue = "true")
 class MdvmErrorHandler(
     telemetryService: TelemetryService,
+    errorMetrics: ErrorMetrics,
 ) : ServiceErrorHandler<MdvmErrorResponseCode, MdvmErrorResponse>(
         telemetryService,
+        errorMetrics,
+        "mdvm",
         MdvmErrorResponseCode.entries,
         MdvmErrorResponse.serializer(),
     ) {
